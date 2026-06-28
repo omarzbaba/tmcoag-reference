@@ -255,7 +255,7 @@ function renderBloodprep() {
   content.append(abCard);
 
   // --- live result ---
-  function sync() { renderBloodprep(); }   // re-render to reflect chip active states (cheap)
+  function sync() { render(); }   // full re-render (clears content first) to reflect chip states
   paintResult(result);
   content.append(result);
 
@@ -275,7 +275,7 @@ function renderBloodprep() {
       into.append(el("h3", {}, "Antibodies"), t);
     }
     for (const f of r.flags) into.append(el("div", { class: "block no", style: "margin-top:10px" }, "⚑ " + f));
-    if (r.recs.length) { into.append(el("h3", {}, "Recommendation")); into.append(list(r.recs)); }
+    if (r.recs.length) { into.append(el("h3", {}, "Plan")); into.append(list(r.recs)); }
     if (r.findings.length) { into.append(el("h3", {}, "Reasoning")); into.append(list(r.findings)); }
     if (r.caveats.length) { into.append(el("h3", {}, "Notes")); into.append(list(r.caveats)); }
     into.append(el("p", { class: "tiny muted" }, "Decision support only. MSBOS is institution-specific; antigen frequencies are population estimates. The blood bank / pathologist remains the final decision-maker."));
@@ -290,18 +290,21 @@ function kpi(value, label) { return el("div", { class: "kpi" }, el("div", { clas
 
 // ================= COAG CDS =================
 function renderCoag() {
-  head("🧪 Coagulation CDS & reporter", "When each coagulation test is — and isn't — indicated, plus the Coag Reporter for building a report.");
-  content.append(el("section", { class: "card reporter-card" },
-    el("h2", {}, "🧾 Coag Reporter"),
-    el("p", {}, "Build a coagulation interpretation report (vWD, lupus anticoagulant) with clickable buttons."),
-    el("a", { class: "btn-primary", href: "CoagReporter.html", target: "_blank", rel: "noopener" }, "Open the Coag Reporter →")));
+  head("🧾 Coag Reporter", "Build a coagulation interpretation report with clickable buttons. The test-indication CDS reference is below.");
+  content.append(el("section", { class: "card reporter-embed" },
+    el("iframe", { src: "CoagReporter.html", class: "reporter-frame", title: "Coag Reporter" }),
+    el("p", { class: "tiny muted", style: "margin:8px 4px 0" }, "Running inside the dashboard. ",
+      el("a", { href: "CoagReporter.html", target: "_blank", rel: "noopener" }, "Open full-screen ↗"))));
+  // CDS test-indication reference (collapsed)
   const tests = (KB.coag || {}).tests || {};
-  content.append(toolbar("Search coagulation tests…", (q, into) => {
+  const det = el("details", { class: "card legend-card" }, el("summary", {}, `Coagulation test CDS — when each test is / isn't indicated (${Object.keys(tests).length} tests)`));
+  det.append(toolbar("Search coagulation tests…", (q, into) => {
     const rows = Object.entries(tests).filter(([n, t]) => !q || [n, t.indicated, t.not_indicated, t.pearls].some((f) => JSON.stringify(f || "").toLowerCase().includes(q.toLowerCase())));
     into.append(el("p", { class: "muted" }, `${rows.length} test${rows.length === 1 ? "" : "s"}`));
     for (const [name, t] of rows) into.append(coagCard(name, t, q));
     if (!rows.length) into.append(el("div", { class: "empty" }, "No matching test."));
   }));
+  content.append(det);
 }
 function coagCard(name, t, q) {
   const card = el("section", { class: "card" }, el("h2", { html: hl(name, q) }));
@@ -320,8 +323,8 @@ function renderReactions() {
   head("⚠️ Transfusion reactions & biovigilance", "NHSN / AABB / ISBT case definitions with Definitive / Probable / Possible criteria, severity, and imputability. Search, or tap a reaction.");
   const r = KB.reactions || {};
   // the three NHSN axes, as reference cards
-  content.append(el("details", { class: "card legend-card", open: "open" },
-    el("summary", {}, "The three NHSN axes (certainty · severity · imputability)"),
+  content.append(el("details", { class: "card legend-card" },
+    el("summary", {}, "The three NHSN axes (certainty · severity · imputability) — overview"),
     r._axes_note ? el("div", { class: "block note" }, r._axes_note) : null,
     el("h3", {}, "Diagnostic certainty — case definition"), defList(arr(r.diagnostic_certainty).map((l) => [l.level, l.desc]), (k) => CERT_CLASS[k]),
     el("h3", {}, "Severity"), defList(arr(r.severity).map((g) => [g.grade, g.desc])),
@@ -342,22 +345,43 @@ function reactionCard(rx, q) {
     el("div", { class: "tile-title", html: hl(rx.name, q) }),
     el("div", { class: "tile-sub", html: hl(rx.onset || "", q) }));
 }
+function sevClass(g) { return /Grade 1/.test(g) ? "cat-I" : /Grade 2/.test(g) ? "cat-III" : /Grade [34]/.test(g) ? "cat-IV" : "grade"; }
+function axis2(rows, clsFn) {
+  const t = el("div", { class: "axis2" });
+  for (const [k, v] of rows) t.append(el("div", { class: "axis2-row" }, el("span", { class: "axis2-k badge " + (clsFn ? (clsFn(k) || "grade") : "grade") }, k), el("span", { class: "axis2-v" }, v)));
+  return t;
+}
 function reactionDetail(rx) {
+  const R = KB.reactions || {};
   content.append(el("button", { class: "back", onclick: () => go("reactions") }, "← All transfusion reactions"));
   const card = el("section", { class: "card" });
   card.append(el("div", { class: "detail-head" }, el("h2", {}, rx.name), rx.acuity ? el("span", { class: "badge pill" }, rx.acuity) : null, rx.frequency ? el("span", { class: "badge grade" }, rx.frequency) : null));
   if (rx.definition) card.append(el("p", {}, rx.definition));
   card.append(defList([["Category", rx.category], ["Onset", rx.onset], ["Mechanism", rx.mechanism]].filter(([, v]) => v)));
+
+  // ① Diagnostic certainty — 3-column case-definition table (NHSN)
   if (rx.certainty) {
-    card.append(el("h3", {}, "NHSN case definition — diagnostic certainty"));
-    const c = rx.certainty, cert = el("div", { class: "certainty" });
-    const lvl = (label, val, cls) => { const na = !val || val === "N/A"; cert.append(el("div", { class: "cert" }, el("span", { class: "badge " + (na ? "grade" : cls) }, label), el("span", { class: "cert-txt" + (na ? " muted" : "") }, na ? "Not applicable for this reaction" : val))); };
-    lvl("Definitive", c.definitive, "cat-IV"); lvl("Probable", c.probable, "cat-III"); lvl("Possible", c.possible, "cat-II");
-    card.append(cert);
+    card.append(el("h3", {}, "① Diagnostic certainty — NHSN case definition"));
+    const c = rx.certainty, grid = el("div", { class: "cert3" });
+    for (const [label, val, cls] of [["Definitive", c.definitive, "cat-IV"], ["Probable", c.probable, "cat-III"], ["Possible", c.possible, "cat-II"]]) {
+      const na = !val || val === "N/A";
+      grid.append(el("div", { class: "cert3-col" + (na ? " na" : "") },
+        el("div", { class: "cert3-head " + cls }, label),
+        el("div", { class: "cert3-body" + (na ? " muted" : "") }, na ? "Not applicable for this reaction" : val)));
+    }
+    card.append(grid);
   }
+  // ② Severity grading
+  card.append(el("h3", {}, "② Severity grading"));
+  card.append(axis2(arr(R.severity).map((g) => [g.grade, g.desc]), sevClass));
+  // ③ Imputability — relatedness
+  card.append(el("h3", {}, "③ Imputability — relatedness to the transfusion"));
+  card.append(axis2(arr(R.imputability).map((l) => [l.level, l.desc]), (k) => IMPUT_CLASS[k]));
+  if (rx.imputability_notes) card.append(el("div", { class: "block note", style: "margin-top:8px" }, "Imputability note — " + rx.imputability_notes));
+
+  // clinical detail
   const sec = (title, items) => { if (arr(items).length) { card.append(el("h3", {}, title)); card.append(list(items)); } };
   sec("Signs & symptoms", rx.signs); sec("Workup", rx.workup); sec("Management", rx.management); sec("Prevention", rx.prevention);
-  if (rx.imputability_notes) { card.append(el("h3", {}, "Imputability note")); card.append(el("div", { class: "block note" }, rx.imputability_notes)); }
   content.append(card);
 }
 
