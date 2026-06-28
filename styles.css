@@ -157,3 +157,45 @@ mark { background: oklch(92% 0.12 95); color: inherit; border-radius: 3px; paddi
   .sidebar { position: static; height: auto; flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 1px solid var(--line); }
   .nav-foot { display: none; }
 }
+
+/* ---- module toolbar + filters ---- */
+.toolbar { margin: 4px 0 12px; }
+.mod-search { width: 100%; padding: 10px 14px; font-size: 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); outline: none; }
+.mod-search:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-wash); }
+.chiprow { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin: 8px 0; }
+.chiplabel { font-size: 12px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .04em; margin-right: 2px; }
+.fchip { font: inherit; font-size: 13px; font-weight: 600; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); cursor: pointer; transition: all .12s; }
+.fchip:hover { border-color: var(--accent); color: var(--ink); }
+.fchip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ---- clickable tiles (ASFA, reactions, search) ---- */
+.cardgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); gap: 12px; }
+.tile { text-align: left; font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; cursor: pointer; display: flex; flex-direction: column; gap: 7px; transition: transform .1s, border-color .12s, box-shadow .12s; }
+.tile:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 16px oklch(50% 0.02 260 / 0.1); }
+.tile-top { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tile-title { font-weight: 650; line-height: 1.3; }
+.tile-sub { font-size: 13px; color: var(--ink-faint); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ---- blood-prep calculator ---- */
+.chosen-surgery { margin-bottom: 10px; }
+.chosen { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--accent-wash); border-radius: 999px; font-size: 14px; }
+.abgroup { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin: 7px 0; }
+.abchip { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); cursor: pointer; transition: all .12s; }
+.abchip:hover { border-color: var(--accent); }
+.abchip.minor { border-style: dashed; color: var(--ink-faint); }
+.abchip.on { background: var(--bad); border-color: var(--bad); color: #fff; }
+.result-card { border-color: var(--accent); }
+.kpis { display: flex; flex-wrap: wrap; gap: 12px; margin: 4px 0 8px; }
+.kpi { background: var(--surface-2); border-radius: 10px; padding: 12px 16px; min-width: 120px; }
+.kpi-val { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; color: var(--ink); }
+.kpi-lab { font-size: 12px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+
+/* ---- coag reporter + buttons ---- */
+.reporter-card { border-color: var(--accent); }
+.btn-primary { display: inline-block; margin-top: 6px; padding: 10px 18px; background: var(--accent); color: #fff; border-radius: 10px; font-weight: 650; text-decoration: none; }
+.btn-primary:hover { filter: brightness(1.05); }
+
+/* ---- misc ---- */
+.legend-card summary { cursor: pointer; font-weight: 650; }
+.legend-card[open] summary { margin-bottom: 8px; }
+.tiny { font-size: 12px; }

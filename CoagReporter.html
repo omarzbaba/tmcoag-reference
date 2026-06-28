@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Coag Reporter</title>
+  <style>
+/* Coag Reporter — clinical, high-contrast, large-target UI. */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --surface-2: #eef2f6;
+  --ink: #14202b;
+  --ink-muted: #5b6b78;
+  --line: #d4dde4;
+  --accent: #0e6b8c;
+  --accent-ink: #ffffff;
+  --ok-bg: #e3f6e8; --ok-line: #2e8b46; --ok-ink: #146c2e;   /* lines meet 3:1 on white */
+  --warn-bg: #fff4e0; --warn-line: #b56b00; --warn-ink: #8a5300;
+  --bad-bg: #fde4e4; --bad-line: #c62f2f; --bad-ink: #a01b1b;
+  --neutral-bg: #f1f4f7; --neutral-line: #cdd6dd;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(20,32,43,.06), 0 4px 16px rgba(20,32,43,.06);
+  --tap: 56px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: "SF Mono", "Cascadia Code", Consolas, "Roboto Mono", monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font-family: var(--font); color: var(--ink); background: var(--bg); font-size: 16px; line-height: 1.5; }
+button { font-family: inherit; cursor: pointer; }
+input, button, textarea, select { font-size: 1rem; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+/* ---- layout ---- */
+.app { display: grid; grid-template-columns: 300px 1fr; grid-template-rows: auto 1fr; height: 100vh; }
+.topbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 12px 18px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.brand { font-weight: 800; font-size: 18px; letter-spacing: -.01em; }
+.brand small { color: var(--ink-muted); font-weight: 600; margin-left: 6px; font-size: 12px; }
+.topbar .spacer { flex: 1; }
+.sidebar { background: var(--surface); border-right: 1px solid var(--line); overflow-y: auto; padding: 10px; }
+.main { overflow-y: auto; padding: 22px clamp(16px, 3vw, 40px); }
+.wrap { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+@media (max-width: 900px) { .app { grid-template-columns: 1fr; } .sidebar { display: none; } .wrap { grid-template-columns: 1fr; } }
+
+/* ---- buttons ---- */
+.btn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 650; }
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.ghost { border-color: transparent; background: transparent; }
+.btn.sm { min-height: 44px; padding: 0 14px; font-size: 14px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ---- sidebar patient list ---- */
+.plist-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 10px; }
+.plist-head h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-muted); margin: 0; }
+.pitem { width: 100%; text-align: left; border: 1px solid transparent; background: transparent; border-radius: 10px; padding: 10px 12px; display: block; margin-bottom: 4px; }
+.pitem:hover { background: var(--surface-2); }
+.pitem.sel { background: #e6f0f4; border-color: #bcd9e4; }
+.pitem .pname { font-weight: 700; }
+.pitem .pmeta { font-size: 12.5px; color: var(--ink-muted); display: flex; align-items: center; gap: 8px; }
+.dot { width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; line-height: 1; color: #fff; background: var(--neutral-line); flex: 0 0 auto; }
+.dot.ok { background: var(--ok-line); } .dot.warn { background: var(--warn-line); } .dot.bad { background: var(--bad-line); }
+.dot.neutral { background: var(--neutral-bg); color: var(--ink-muted); border: 1px solid var(--neutral-line); }
+
+/* ---- cards ---- */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+.card h2 { margin: 0 0 14px; font-size: 16px; }
+.card.full { grid-column: 1 / -1; }
+.muted { color: var(--ink-muted); }
+
+/* ---- demographics ---- */
+.demo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.field label { display: block; font-size: 12.5px; font-weight: 700; color: var(--ink-muted); margin-bottom: 4px; }
+.field input { width: 100%; min-height: 46px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+
+/* ---- panel picker ---- */
+.panelpick { display: flex; flex-wrap: wrap; gap: 10px; }
+.panelpick .btn { min-height: var(--tap); font-size: 15px; }
+.panelpick .btn[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ---- analyte rows ---- */
+.agroup { margin-bottom: 6px; }
+.agroup > h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-muted); margin: 14px 0 8px; }
+.arow { display: grid; grid-template-columns: 1fr auto; gap: 8px 14px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; border-left-width: 6px; border-left-color: var(--neutral-line); }
+.arow.ok { border-left-color: var(--ok-line); background: linear-gradient(0deg, var(--ok-bg), var(--ok-bg)) padding-box; }
+.arow.warn { border-left-color: var(--warn-line); }
+.arow.bad { border-left-color: var(--bad-line); }
+.arow .alabel { font-weight: 650; }
+.arow .aref { font-size: 12.5px; color: var(--ink-muted); }
+.arow .actl { display: flex; align-items: center; gap: 8px; justify-self: end; }
+
+/* big numeric stepper */
+.num { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.num button { width: var(--tap); min-height: var(--tap); border: none; background: var(--surface-2); font-size: 26px; font-weight: 700; color: var(--accent); line-height: 1; }
+.num button:hover { background: #e2e9ee; }
+.num input { width: 96px; border: none; text-align: center; font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; background: var(--surface); }
+.num input::-webkit-outer-spin-button, .num input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.num input[type=number] { -moz-appearance: textfield; }
+.unit { font-size: 14px; color: var(--ink-muted); min-width: 42px; }
+
+/* status chip */
+.chip { min-width: 96px; text-align: center; padding: 6px 10px; border-radius: 999px; font-weight: 800; font-size: 13px; border: 1px solid var(--neutral-line); background: var(--neutral-bg); color: var(--ink-muted); }
+.chip.ok { background: var(--ok-bg); border-color: var(--ok-line); color: var(--ok-ink); }
+.chip.warn { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-ink); }
+.chip.bad { background: var(--bad-bg); border-color: var(--bad-line); color: var(--bad-ink); }
+
+/* choice toggle buttons */
+.choice { display: inline-flex; gap: 8px; }
+.choice button { min-height: var(--tap); padding: 0 18px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); font-weight: 750; font-size: 15px; }
+.choice button[aria-pressed="true"][data-kind="normal"] { background: var(--ok-bg); border-color: var(--ok-line); color: var(--ok-ink); }
+.choice button[aria-pressed="true"][data-kind="abnormal"] { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-ink); }
+.choice button[aria-pressed="true"][data-kind="skip"] { background: var(--surface-2); border-color: var(--ink-muted); color: var(--ink); }
+
+/* ---- report ---- */
+.report-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.report { white-space: pre-wrap; font-family: var(--mono); font-size: 14px; line-height: 1.6; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-height: 180px; }
+.report .rh { font-weight: 800; }
+.toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px; box-shadow: var(--shadow); opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: 1; }
+
+/* ---- settings ---- */
+.settings textarea { width: 100%; min-height: 90px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; font-family: var(--mono); font-size: 13px; line-height: 1.5; }
+.settings .field input.range { width: 110px; min-height: 40px; }
+.range-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+.tpl-row { margin-bottom: 14px; }
+.tpl-row label { display: block; font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+
+.empty { text-align: center; color: var(--ink-muted); padding: 60px 20px; }
+.draft-badge { margin-left: 10px; font-size: 11px; font-weight: 800; letter-spacing: .05em; padding: 2px 8px; border-radius: 999px; background: var(--warn-bg); color: var(--warn-ink); border: 1px solid var(--warn-line); vertical-align: middle; }
+
+/* ---- batch UI (topbar select + sidebar batch header) ---- */
+.tb-label { font-size: 13px; font-weight: 700; color: var(--ink-muted); }
+.batch-select { min-height: 44px; max-width: 240px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); font-weight: 650; }
+.batch-head { padding: 6px 8px 12px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.batch-name { width: 100%; min-height: 42px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-weight: 800; font-size: 15px; margin-bottom: 8px; background: var(--surface); }
+.batch-actions { display: flex; gap: 8px; }
+.batch-actions .btn { flex: 1; justify-content: center; }
+
+/* ---- print (single OR batch — both go through the .print-batch overlay) ---- */
+.print-batch { display: none; }
+@media print {
+  body.batch-print > .app { display: none !important; }
+  body.batch-print .print-batch { display: block !important; }
+  .print-batch .report-page { white-space: pre-wrap; font-family: var(--font); font-size: 12pt; line-height: 1.5; color: #000; page-break-after: always; }
+  .print-batch .report-page:last-child { page-break-after: auto; }
+}
+
+</style>
+</head>
+<body>
+  <div class="app" id="app"></div>
+  <script>
+/* Coag Reporter — default panel definitions.
+ *
+ * Each panel is data: analytes (numeric or choice, with reference ranges and a
+ * clinical-significance threshold) plus EDITABLE prose template fragments. The
+ * engine (engine.js) fills the {placeholders} and selects the right narrative
+ * branch. Everything here can be overridden by the user in Settings, so the
+ * attending controls the wording, ranges, and signature without touching code.
+ *
+ * Wording for vWD (negative) and Lupus anticoagulant is taken verbatim from
+ * Dr. Rachel Brancamp's templates.
+ */
+(function (root) {
+  "use strict";
+
+  var DEFAULT_PANELS = [
+    {
+      id: "vwd",
+      title: "von Willebrand disease panel",
+      heading: "VON WILLEBRAND DISEASE PANEL",
+      signature: "Rachel Brancamp, MD",
+      analytes: [
+        { id: "vwf_ag", label: "von Willebrand factor antigen", unit: "%", type: "number", low: 50, high: 150, abnormal: "low", decimals: 0 },
+        { id: "gp1b",   label: "GP1b activity",                 unit: "%", type: "number", low: 50, high: 150, abnormal: "low", decimals: 0 },
+        { id: "fviii",  label: "factor VIII activity",          unit: "%", type: "number", low: 50, high: 150, abnormal: "low", decimals: 0 },
+        { id: "fibrinogen", label: "fibrinogen",          unit: "mg/dL", type: "number", low: 200, high: 450, abnormal: "low", decimals: 0 }
+      ],
+      // The analyte sentence ("The X (52%), Y (88%) … are not decreased.") is
+      // assembled by the engine from ONLY the entered analytes, so blanks never
+      // leak; these editable fragments are the fixed clinical wording around it.
+      templates: {
+        intro: "Laboratory testing for von Willebrand disease is performed. ",
+        concl_negative: "This evaluation is negative for von Willebrand disease.",
+        concl_pending: "Interpretation pending completion of the panel.",
+        abnormal_tail: "These results may be consistent with von Willebrand disease; correlation with the clinical history and consideration of VWF multimer analysis / subtyping is suggested. [DRAFT abnormal wording — edit in Settings to match your preferred report.]"
+      }
+    },
+
+    {
+      id: "lupus_ac",
+      title: "Lupus anticoagulant evaluation",
+      heading: "LUPUS ANTICOAGULANT EVALUATION",
+      signature: "Rachel Brancamp, MD",
+      analytes: [
+        { id: "ptt_la", label: "PTT-LA", type: "choice",
+          options: [{ v: "neg", label: "Negative", kind: "normal" }, { v: "pos", label: "Positive", kind: "abnormal" }] },
+        { id: "drvvt", label: "dRVVT", type: "choice",
+          options: [{ v: "neg", label: "Negative", kind: "normal" }, { v: "pos", label: "Positive", kind: "abnormal" }] },
+        { id: "drvvt_ratio", label: "dRVVT normalized ratio", type: "number", low: null, high: 1.2, abnormal: "high", decimals: 1, showWhen: { drvvt: "pos" } },
+        { id: "apa_performed", label: "Antiphospholipid antibodies performed?", type: "choice",
+          options: [{ v: "no", label: "Not performed", kind: "skip" }, { v: "yes", label: "Performed", kind: "normal" }] },
+        { id: "acl_igg", label: "anticardiolipin IgG", unit: "GPL", type: "number", low: null, high: 15, sig: 40, abnormal: "high", decimals: 1, showWhen: { apa_performed: "yes" } },
+        { id: "acl_igm", label: "anticardiolipin IgM", unit: "MPL", type: "number", low: null, high: 15, sig: 40, abnormal: "high", decimals: 1, showWhen: { apa_performed: "yes" } },
+        { id: "b2_igg",  label: "anti-beta 2 glycoprotein I IgG", unit: "U/mL", type: "number", low: null, high: 20, sig: 40, abnormal: "high", decimals: 1, showWhen: { apa_performed: "yes" } },
+        { id: "b2_igm",  label: "anti-beta 2 glycoprotein I IgM", unit: "U/mL", type: "number", low: null, high: 20, sig: 40, abnormal: "high", decimals: 1, showWhen: { apa_performed: "yes" } }
+      ],
+      // Antibody display names used when describing elevations in prose.
+      apa_names: {
+        acl_igg: "anticardiolipin IgG antibody",
+        acl_igm: "anticardiolipin IgM antibody",
+        b2_igg: "anti-beta 2 glycoprotein I IgG antibody",
+        b2_igm: "anti-beta 2 glycoprotein I IgM antibody"
+      },
+      templates: {
+        intro: "Laboratory testing for lupus anticoagulant is performed. ",
+        res_both_neg: "Two tests for the presence of a lupus anticoagulant, the PTT-LA and the dRVV time, are both negative. ",
+        res_ptt_only: "One test for the presence of a lupus anticoagulant, the PTT-LA, is positive, while another, the dRVV time, is negative. ",
+        // {ratio_paren} expands to " (normalized ratio = 1.6)" when a ratio is
+        // entered, and to nothing when it is left blank (so no "#.#" leaks).
+        res_drvvt_only: "One test for the presence of a lupus anticoagulant, the dRVVT{ratio_paren}, is positive, while another, the PTT-LA, is negative. ",
+        res_both_pos: "Two tests for the presence of a lupus anticoagulant, the PTT-LA and dRVVT{ratio_paren} are positive. ",
+        apa_all_normal: "Anticardiolipin and anti-beta 2 glycoprotein I IgG and IgM antibodies are normal.",
+        concl_neg: "This evaluation is negative for the presence of a lupus anticoagulant.",
+        concl_neg_nonsig: "This evaluation is negative for the presence of a lupus anticoagulant. The elevation of the {antibody} is below a clinically significant level (>40.0).",
+        concl_pos: "This evaluation suggests the presence of a lupus anticoagulant. However, confirmation requires repeat positive testing at least 12 weeks after the current evaluation.",
+        concl_sig_apa: "This evaluation demonstrates a clinically significant elevation (>40.0) of the {antibody}. Testing should be repeated after at least 12 weeks to determine if this elevation persists.\n\nTesting for the presence of a lupus anticoagulant is negative.",
+        concl_sig_apa_addon: "In addition, there is a clinically significant elevation (>40.0) of the {antibody}, which should be repeated after at least 12 weeks to determine if it persists."
+      }
+    }
+  ];
+
+  // ===================================================================
+  // Drafted from the existing reviewed TM·Coag panels (click-state model).
+  // These render in the same UI and use the generic rule-based prose engine.
+  // Wording is a DRAFT — refine intro/conclusion in Settings (rule impressions
+  // are reused verbatim from your reviewed panel logic).
+  // ===================================================================
+  function _opt(a) { return a.length > 3 ? { v: a[0], label: a[1], kind: a[2], report: a[3] } : { v: a[0], label: a[1], kind: a[2] }; }
+  function A(id, label, group, arr) { return { id: id, label: label, type: "choice", group: group, options: arr.map(_opt) }; }
+  var _N = ["normal", "Normal", "normal"], _NEG = ["negative", "Negative", "normal"];
+
+  DEFAULT_PANELS.push({
+    id: "bleeding_diathesis",
+    title: "Bleeding diathesis panel",
+    heading: "BLEEDING DIATHESIS PANEL",
+    signature: "Rachel Brancamp, MD",
+    draft: true,
+    analytes: [
+      A("pt", "PT / INR", "Basic coagulation", [_N, ["prolonged", "↑ Prolonged", "abnormal", "The PT/INR is prolonged."]]),
+      A("aptt", "aPTT", "Basic coagulation", [_N, ["prolonged", "↑ Prolonged", "abnormal", "The aPTT is prolonged."]]),
+      A("fibrinogen", "Fibrinogen", "Basic coagulation", [_N, ["low", "↓ Low", "abnormal", "The fibrinogen is decreased."], ["high", "↑ High", "abnormal", "The fibrinogen is increased (acute-phase reactant)."]]),
+      A("platelet_count", "Platelet count", "Basic coagulation", [_N, ["low", "↓ Low", "abnormal", "The platelet count is decreased (thrombocytopenia)."], ["high", "↑ High", "abnormal", "The platelet count is increased (thrombocytosis)."]]),
+      A("thrombin_time", "Thrombin time", "Basic coagulation", [_N, ["prolonged", "↑ Prolonged", "abnormal", "The thrombin time is prolonged."]]),
+      A("d_dimer", "D-dimer", "Basic coagulation", [_N, ["elevated", "↑ Elevated", "abnormal", "The D-dimer is elevated."]]),
+      A("vwf_gp1b", "VWF:GP1bM activity", "Von Willebrand screen", [_N, ["decreased", "↓ Low", "abnormal", "The VWF activity (GP1bM) is reduced."]]),
+      A("vwf_ag", "Von Willebrand antigen", "Von Willebrand screen", [_N, ["decreased", "↓ Low", "abnormal", "The VWF antigen is reduced."]]),
+      A("factor_viii", "Factor VIII activity", "Von Willebrand screen", [_N, ["decreased", "↓ Low", "abnormal", "The factor VIII activity is reduced."], ["elevated", "↑ High", "abnormal", "The factor VIII activity is elevated (acute-phase reactant)."]]),
+      A("multimer", "Multimeric analysis", "Von Willebrand screen", [_N, ["abnormal", "Abnormal", "abnormal", "The multimer pattern is abnormal (loss of high-molecular-weight multimers)."]]),
+      A("factor_xii", "Factor XII activity", "Specific factors", [_N, ["decreased", "↓ Low", "abnormal", "The factor XII activity is reduced."]]),
+      A("factor_ix", "Factor IX activity", "Specific factors", [_N, ["decreased", "↓ Low", "abnormal", "The factor IX activity is reduced."]]),
+      A("factor_xi", "Factor XI activity", "Specific factors", [_N, ["decreased", "↓ Low", "abnormal", "The factor XI activity is reduced."]]),
+      A("factor_v", "Factor V activity", "Specific factors", [_N, ["decreased", "↓ Low", "abnormal", "The factor V activity is reduced."]]),
+      A("factor_vii", "Factor VII activity", "Specific factors", [_N, ["decreased", "↓ Low", "abnormal", "The factor VII activity is reduced."]]),
+      A("factor_x", "Factor X activity", "Specific factors", [_N, ["decreased", "↓ Low", "abnormal", "The factor X activity is reduced."]]),
+      A("factor_ii", "Factor II activity", "Specific factors", [_N, ["decreased", "↓ Low", "abnormal", "The factor II (prothrombin) activity is reduced."]]),
+      A("factor_xiii", "Factor XIII screen", "Specific factors", [_NEG, ["positive", "+ Positive", "abnormal", "The factor XIII screen is positive (soluble clot), indicating factor XIII deficiency."]]),
+      A("inhibitor_screen", "Factor inhibitor screen", "Specific factors", [_NEG, ["positive", "+ Positive", "abnormal", "The factor inhibitor screen is positive (Bethesda units detected)."]]),
+      A("closure_epi", "PFA closure time — EPI", "Specific factors", [_N, ["prolonged", "↑ Prolonged", "abnormal", "The PFA closure time (EPI) is prolonged."]]),
+      A("closure_adp", "PFA closure time — ADP", "Specific factors", [_N, ["prolonged", "↑ Prolonged", "abnormal", "The PFA closure time (ADP) is prolonged."]])
+    ],
+    rules: [
+      { id: "vwd_quantitative", when: { vwf_gp1b: ["decreased"], vwf_ag: ["decreased"] }, impression: "Reduced VWF activity and antigen support von Willebrand disease; proportionally reduced activity and antigen (ratio ≥0.7) favour a quantitative type 1 defect, and factor VIII is often reduced in parallel." },
+      { id: "vwd_qualitative", when: { vwf_gp1b: ["decreased"], vwf_ag: ["normal", "not_done"] }, impression: "Reduced VWF activity with preserved antigen (low activity:antigen ratio, <0.7) suggests a qualitative type 2 von Willebrand defect; confirm with multimer analysis." },
+      { id: "vwd_low_antigen", when: { vwf_ag: ["decreased"], vwf_gp1b: ["normal", "not_done"] }, impression: "Reduced VWF antigen indicates low von Willebrand factor; with proportionally reduced activity this is type 1 von Willebrand disease. Blood group O lowers VWF physiologically." },
+      { id: "multimer_abn", when: { multimer: ["abnormal"] }, impression: "An abnormal multimer pattern (loss of high-molecular-weight multimers) supports type 2 von Willebrand disease." },
+      { id: "isolated_pt", when: { pt: ["prolonged"], aptt: ["normal", "not_done"] }, impression: "Isolated PT prolongation points to factor VII deficiency or an early/partial vitamin-K-dependent defect (warfarin, vitamin K deficiency, early liver disease)." },
+      { id: "isolated_aptt", when: { aptt: ["prolonged"], pt: ["normal", "not_done"] }, impression: "Isolated aPTT prolongation indicates an intrinsic-pathway factor deficiency (VIII, IX, XI, or XII) or — with low factor VIII — von Willebrand disease; an inhibitor or lupus anticoagulant is also possible." },
+      { id: "both_pt_aptt", when: { pt: ["prolonged"], aptt: ["prolonged"] }, impression: "Combined PT and aPTT prolongation suggests a common-pathway or multiple-factor process: liver disease, vitamin K deficiency or warfarin, DIC, or a deficiency of factor II, V, or X." },
+      { id: "dic", when: { platelet_count: ["low"], fibrinogen: ["low"], d_dimer: ["elevated"] }, impression: "Thrombocytopenia with low fibrinogen and an elevated D-dimer, in the appropriate setting, is consistent with disseminated intravascular coagulation (DIC)." },
+      { id: "f8_low", when: { factor_viii: ["decreased"] }, impression: "Reduced factor VIII may reflect hemophilia A, von Willebrand disease (factor VIII low secondary to low VWF), or an acquired factor VIII inhibitor." },
+      { id: "f9_low", when: { factor_ix: ["decreased"] }, impression: "Reduced factor IX is consistent with hemophilia B." },
+      { id: "f11_low", when: { factor_xi: ["decreased"] }, impression: "Reduced factor XI (the bleeding risk correlates poorly with the level)." },
+      { id: "f12_low", when: { factor_xii: ["decreased"] }, impression: "Reduced factor XII prolongs the aPTT but is not associated with bleeding." },
+      { id: "f7_low", when: { factor_vii: ["decreased"] }, impression: "Reduced factor VII is an isolated extrinsic-pathway deficiency (prolongs the PT only)." },
+      { id: "f5_low", when: { factor_v: ["decreased"] }, impression: "Reduced factor V (consider combined factor V and VIII deficiency, or liver disease)." },
+      { id: "f10_low", when: { factor_x: ["decreased"] }, impression: "Reduced factor X (consider acquired causes such as amyloidosis)." },
+      { id: "f2_low", when: { factor_ii: ["decreased"] }, impression: "Reduced factor II (prothrombin), which is vitamin-K-dependent; consider warfarin, vitamin K deficiency, or liver disease." },
+      { id: "f13_pos", when: { factor_xiii: ["positive"] }, impression: "A positive factor XIII screen indicates factor XIII deficiency — delayed bleeding and poor wound healing with a normal PT and aPTT." },
+      { id: "inhibitor", when: { inhibitor_screen: ["positive"] }, impression: "A positive inhibitor screen indicates a specific factor inhibitor; identify the target factor and quantify the Bethesda titer." },
+      { id: "closure_both", when: { closure_epi: ["prolonged"], closure_adp: ["prolonged"] }, impression: "Both PFA closure times are prolonged — von Willebrand disease or a platelet function defect (also seen with significant thrombocytopenia or anemia)." },
+      { id: "closure_epi_only", when: { closure_epi: ["prolonged"], closure_adp: ["normal", "not_done"] }, impression: "A prolonged EPI closure time with a normal ADP closure time is the classic aspirin/NSAID pattern." },
+      { id: "tt_prolonged", when: { thrombin_time: ["prolonged"] }, impression: "A prolonged thrombin time suggests heparin effect, a direct thrombin inhibitor (dabigatran), hypofibrinogenemia, or dysfibrinogenemia." }
+    ],
+    caveats: [
+      { id: "cav_vwf_acute", when: { vwf_gp1b: ["decreased"] }, text: "VWF is an acute-phase reactant raised by stress, inflammation, pregnancy, and estrogen; a single low value should be repeated when the patient is well." }
+    ],
+    templates: {
+      intro: "Laboratory testing for a bleeding diathesis is performed.",
+      concl_none: "No specific bleeding-disorder pattern is identified among the tested analytes; correlate with the clinical bleeding history.",
+      empty: "No bleeding-diathesis panel results have been entered."
+    }
+  });
+
+  DEFAULT_PANELS.push({
+    id: "hypercoagulability",
+    title: "Hypercoagulability panel",
+    heading: "HYPERCOAGULABILITY (THROMBOPHILIA) PANEL",
+    signature: "Rachel Brancamp, MD",
+    draft: true,
+    analytes: [
+      A("pt", "PT / INR", "Basic panel", [_N, ["prolonged", "↑ Prolonged", "abnormal", "The PT/INR is prolonged."]]),
+      A("aptt", "aPTT", "Basic panel", [_N, ["prolonged", "↑ Prolonged", "abnormal", "The aPTT is prolonged."]]),
+      A("fibrinogen", "Fibrinogen", "Basic panel", [_N, ["low", "↓ Low", "abnormal", "The fibrinogen is decreased."], ["high", "↑ High", "abnormal", "The fibrinogen is increased (acute-phase reactant)."]]),
+      A("thrombin_time", "Thrombin time", "Basic panel", [_N, ["prolonged", "↑ Prolonged", "abnormal", "The thrombin time is prolonged."]]),
+      A("platelet_count", "Platelet count", "Basic panel", [_N, ["low", "↓ Low", "abnormal", "The platelet count is decreased."], ["high", "↑ High", "abnormal", "The platelet count is increased (consider a myeloproliferative neoplasm)."]]),
+      A("ptt_la", "PTT-LA screen", "Antiphospholipid", [_N, ["prolonged", "↑ Prolonged", "abnormal", "The PTT-LA screen is prolonged."]]),
+      A("hexagonal", "Hexagonal phospholipid confirm", "Antiphospholipid", [_NEG, ["positive", "+ Positive", "abnormal", "The hexagonal-phase phospholipid neutralization is positive (phospholipid-dependent inhibitor)."]]),
+      A("drvvt_screen", "DRVVT screen ratio", "Antiphospholipid", [_N, ["elevated", "↑ ≥1.2", "abnormal", "The DRVVT screen ratio is elevated (≥1.2)."]]),
+      A("drvvt_norm", "DRVVT normalized ratio", "Antiphospholipid", [_N, ["elevated", "↑ ≥1.2", "abnormal", "The DRVVT normalized (screen:confirm) ratio is elevated (≥1.2), confirming phospholipid dependence."]]),
+      A("mix_rosner", "1:1 mix (Rosner index)", "Antiphospholipid", [["corrects", "Corrects (≤8%)", "abnormal", "The 1:1 mix corrects (Rosner ≤8%), favouring a factor deficiency over an inhibitor."], ["incomplete", "Incomplete (≥9%)", "abnormal", "The 1:1 mix shows incomplete correction (Rosner ≥9%), indicating an inhibitor."]]),
+      A("acl_igg", "Anticardiolipin IgG", "Antiphospholipid", [_NEG, ["positive", "+ Positive", "abnormal", "The anticardiolipin IgG is positive."]]),
+      A("acl_igm", "Anticardiolipin IgM", "Antiphospholipid", [_NEG, ["positive", "+ Positive", "abnormal", "The anticardiolipin IgM is positive."]]),
+      A("b2_igg", "Beta-2 glycoprotein-I IgG", "Antiphospholipid", [_NEG, ["positive", "+ Positive", "abnormal", "The anti-β2-glycoprotein-I IgG is positive."]]),
+      A("b2_igm", "Beta-2 glycoprotein-I IgM", "Antiphospholipid", [_NEG, ["positive", "+ Positive", "abnormal", "The anti-β2-glycoprotein-I IgM is positive."]]),
+      A("protein_c_activity", "Protein C activity", "Natural anticoagulants", [_N, ["decreased", "↓ Low", "abnormal", "The protein C activity is reduced."]]),
+      A("protein_c_antigen", "Protein C antigen", "Natural anticoagulants", [_N, ["decreased", "↓ Low", "abnormal", "The protein C antigen is reduced."]]),
+      A("protein_s_activity", "Protein S activity", "Natural anticoagulants", [_N, ["decreased", "↓ Low", "abnormal", "The protein S activity is reduced."]]),
+      A("protein_s_total_ag", "Protein S total antigen", "Natural anticoagulants", [_N, ["decreased", "↓ Low", "abnormal", "The protein S total antigen is reduced."]]),
+      A("protein_s_free_ag", "Protein S free antigen", "Natural anticoagulants", [_N, ["decreased", "↓ Low", "abnormal", "The protein S free antigen is reduced."]]),
+      A("at3_activity", "Antithrombin activity", "Natural anticoagulants", [_N, ["decreased", "↓ Low", "abnormal", "The antithrombin activity is reduced."]]),
+      A("at3_antigen", "Antithrombin antigen", "Natural anticoagulants", [_N, ["decreased", "↓ Low", "abnormal", "The antithrombin antigen is reduced."]]),
+      A("apcr", "Activated protein C resistance", "APC resistance", [["normal", "Normal (≥2.0)", "normal"], ["reduced", "↓ Resistant (<2.0)", "abnormal", "Activated protein C resistance is present (ratio <2.0)."]]),
+      A("apcr_norm", "Normalized APCR ratio", "APC resistance", [["normal", "Normal (>0.84)", "normal"], ["reduced", "↓ Low (≤0.84)", "abnormal", "The normalized APC-resistance ratio is reduced (≤0.84)."]]),
+      A("factor_viii", "Factor VIII activity", "Factor activity", [_N, ["decreased", "↓ Low", "abnormal", "The factor VIII activity is reduced."], ["elevated", "↑ High", "abnormal", "The factor VIII activity is elevated."]]),
+      A("factor_xi", "Factor XI activity", "Factor activity", [_N, ["decreased", "↓ Low", "abnormal", "The factor XI activity is reduced."], ["elevated", "↑ High", "abnormal", "The factor XI activity is elevated (a weaker thrombosis risk factor)."]])
+    ],
+    rules: [
+      { id: "pc_low", when: { protein_c_activity: ["decreased"] }, impression: "Reduced protein C — interpret off vitamin K antagonists (warfarin lowers it) and away from acute thrombosis, liver disease, and DIC." },
+      { id: "ps_low_activity", when: { protein_s_activity: ["decreased"] }, impression: "Reduced protein S activity — lowered by warfarin, pregnancy, estrogen, acute thrombosis, and inflammation; confirm with free antigen at steady state." },
+      { id: "ps_low_free", when: { protein_s_free_ag: ["decreased"] }, impression: "Reduced free protein S antigen supports protein S deficiency once acquired causes (warfarin, pregnancy, estrogen, acute event) are excluded." },
+      { id: "at_low", when: { at3_activity: ["decreased"] }, impression: "Reduced antithrombin — confirm at steady state. It is consumed in acute thrombosis, DIC, and sepsis, lowered by heparin, and reduced in liver disease and nephrotic syndrome." },
+      { id: "apcr_reduced", when: { apcr: ["reduced"] }, impression: "Reduced activated protein C resistance is most often due to factor V Leiden; confirm with factor V Leiden genotyping." },
+      { id: "apcr_norm_reduced", when: { apcr_norm: ["reduced"] }, impression: "A low normalized APC-resistance ratio (≤0.84) supports APC resistance; reflex to factor V Leiden genotyping." },
+      { id: "la_hex", when: { hexagonal: ["positive"] }, impression: "A positive hexagonal-phase phospholipid neutralization confirms a phospholipid-dependent inhibitor (lupus anticoagulant). A single positive must be confirmed on a repeat sample at least 12 weeks apart." },
+      { id: "la_drvvt", when: { drvvt_norm: ["elevated"] }, impression: "An elevated DRVVT normalized ratio supports a lupus anticoagulant (Russell-viper-venom method)." },
+      { id: "la_mix", when: { ptt_la: ["prolonged"], mix_rosner: ["incomplete"] }, impression: "A prolonged PTT-LA with incomplete mix correction (Rosner ≥9%) indicates an inhibitor — most often a lupus anticoagulant in this setting (exclude a specific factor inhibitor and heparin/DOAC)." },
+      { id: "acl_pos", when: { acl_igg: ["positive"] }, impression: "Anticardiolipin IgG positivity is one antiphospholipid criterion; a medium-to-high titer persistent at ≥12 weeks supports antiphospholipid syndrome." },
+      { id: "b2_pos", when: { b2_igg: ["positive"] }, impression: "Anti-β2-glycoprotein-I IgG positivity is one antiphospholipid criterion; confirm persistence at ≥12 weeks." },
+      { id: "aps_triple", when: { hexagonal: ["positive"], acl_igg: ["positive"], b2_igg: ["positive"] }, impression: "Triple-positive antiphospholipid serology (lupus anticoagulant plus anticardiolipin plus anti-β2GPI) carries the highest thrombotic risk and recurrence rate; direct oral anticoagulants are discouraged." },
+      { id: "f8_high", when: { factor_viii: ["elevated"] }, impression: "Persistently elevated factor VIII is a thrombosis risk factor, but factor VIII is also an acute-phase reactant — confirm away from acute illness." },
+      { id: "all_neg", when: { protein_c_activity: ["normal"], protein_s_activity: ["normal"], at3_activity: ["normal"], apcr: ["normal"], hexagonal: ["negative", "not_done"], acl_igg: ["negative", "not_done"], b2_igg: ["negative", "not_done"] }, impression: "No inherited or acquired thrombophilia is detected among the analytes tested." }
+    ],
+    caveats: [],
+    templates: {
+      intro: "Laboratory testing for a hypercoagulable state (thrombophilia) is performed.",
+      concl_none: "No specific thrombophilia pattern is identified among the tested analytes; correlate with the clinical picture and the timing of testing.",
+      empty: "No hypercoagulability panel results have been entered."
+    }
+  });
+
+  root.DEFAULT_PANELS = DEFAULT_PANELS;
+  if (typeof module !== "undefined" && module.exports) module.exports = { DEFAULT_PANELS: DEFAULT_PANELS };
+})(typeof window !== "undefined" ? window : this);
+
+/* Coag Reporter — interpretation engine (pure, testable).
+ *
+ * classify(analyte, value) → { kind, symbol } drives the green/amber/red color
+ * coding. buildReport(panel, values) → { ..., full } produces the copy-ready
+ * prose, selecting the correct narrative branch and interpolating entered
+ * values. No DOM; runs the same in the browser and under node for tests.
+ *
+ * Safety invariants (enforced after adversarial review):
+ *  - a value that was never entered is NEVER asserted as normal / "not decreased"
+ *    and NEVER leaks a literal {placeholder} into a signed report;
+ *  - a "negative" conclusion is only emitted when the panel is complete;
+ *  - a clinically significant (>threshold) antibody is never dropped from the
+ *    conclusion, even when a lupus anticoagulant is also positive.
+ */
+(function (root) {
+  "use strict";
+
+  function isNum(v) { return v !== "" && v !== null && v !== undefined && isFinite(Number(v)); }
+
+  // ---- numeric classification (for color coding) ----------------------
+  function classifyNumber(analyte, value) {
+    if (value === "" || value === null || value === undefined) return { kind: "none", symbol: "" };
+    if (!isFinite(Number(value))) return { kind: "invalid", symbol: "⚠" };
+    var v = Number(value);
+    if (analyte.sig != null && v > analyte.sig) return { kind: "sig", symbol: "‼" };
+    if (analyte.high != null && v > analyte.high) return { kind: "high", symbol: "↑" };
+    if (analyte.low != null && v < analyte.low) return { kind: "low", symbol: "↓" };
+    return { kind: "normal", symbol: "✓" };
+  }
+  function classifyChoice(analyte, value) {
+    if (value === "" || value == null) return { kind: "none", symbol: "" };
+    var opt = (analyte.options || []).filter(function (o) { return o.v === value; })[0];
+    if (!opt) return { kind: "none", symbol: "" };
+    if (opt.kind === "abnormal") return { kind: "abnormal", symbol: "+" };
+    if (opt.kind === "skip") return { kind: "skip", symbol: "" };
+    return { kind: "normal", symbol: "✓" };
+  }
+  function classify(analyte, value) {
+    return analyte.type === "number" ? classifyNumber(analyte, value) : classifyChoice(analyte, value);
+  }
+  // single consistent severity model: ok | warn | bad | neutral (+ invalid)
+  function colorOf(kind) {
+    if (kind === "normal") return "ok";
+    if (kind === "high" || kind === "low" || kind === "abnormal") return "warn";
+    if (kind === "sig" || kind === "invalid") return "bad";
+    return "neutral";
+  }
+
+  // ---- helpers --------------------------------------------------------
+  function fmt(analyte, value) {
+    if (!isNum(value)) return "";
+    var n = Number(value);
+    var d = analyte && analyte.decimals != null ? analyte.decimals : 1;
+    return n.toFixed(d);
+  }
+  // Unresolved placeholders resolve to "" so a raw {token} can never reach a
+  // signed report; builders never depend on an empty fill for a clinical claim.
+  function fill(tpl, map) {
+    return String(tpl || "").replace(/\{(\w+)\}/g, function (m, k) {
+      return (map[k] != null && map[k] !== "") ? map[k] : "";
+    });
+  }
+  function analyteById(panel, id) {
+    var list = panel.analytes || [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
+  function joinList(items) {
+    items = items.filter(Boolean);
+    if (items.length === 0) return "";
+    if (items.length === 1) return items[0];
+    if (items.length === 2) return items[0] + " and " + items[1];
+    return items.slice(0, -1).join(", ") + ", and " + items[items.length - 1];
+  }
+
+  // ---- vWD ------------------------------------------------------------
+  function buildVWD(panel, values) {
+    var t = panel.templates;
+    var ids = ["vwf_ag", "gp1b", "fviii", "fibrinogen"];
+    var entered = ids.filter(function (id) { return isNum(values[id]); });
+    if (!entered.length) return "No von Willebrand panel results have been entered.";
+
+    function phr(id) { var a = analyteById(panel, id); return a.label + " (" + fmt(a, values[id]) + (a.unit === "%" ? "%" : " " + a.unit) + ")"; }
+    var decreased = entered.filter(function (id) { var a = analyteById(panel, id); return a.low != null && Number(values[id]) < a.low; });
+    var complete = entered.length === ids.length;
+
+    if (decreased.length === 0) {
+      var sent = "The " + joinList(entered.map(phr)) + (entered.length > 1 ? " are not decreased." : " is not decreased.");
+      if (complete) return t.intro + sent + "\n\n" + t.concl_negative;
+      var missing = ids.filter(function (id) { return entered.indexOf(id) < 0; }).map(function (id) { return analyteById(panel, id).label; });
+      return t.intro + sent + " The " + joinList(missing) + (missing.length > 1 ? " were not resulted." : " was not resulted.") + "\n\n" + t.concl_pending;
+    }
+    var abn = "The " + joinList(decreased.map(phr)) + (decreased.length > 1 ? " are decreased." : " is decreased.");
+    var notDecIds = entered.filter(function (id) { return decreased.indexOf(id) < 0; });
+    var notDec = notDecIds.length ? " The " + joinList(notDecIds.map(phr)) + (notDecIds.length > 1 ? " are not decreased." : " is not decreased.") : "";
+    return t.intro + abn + notDec + "\n\n" + t.abnormal_tail;
+  }
+
+  // ---- Lupus anticoagulant -------------------------------------------
+  function buildLA(panel, values) {
+    var t = panel.templates, names = panel.apa_names || {};
+    var ptt = values.ptt_la, drvvt = values.drvvt;
+    var laPos = ptt === "pos" || drvvt === "pos";
+    var ratioParen = isNum(values.drvvt_ratio) ? " (normalized ratio = " + fmt(analyteById(panel, "drvvt_ratio"), values.drvvt_ratio) + ")" : "";
+
+    var res;
+    if (ptt === "pos" && drvvt === "pos") res = fill(t.res_both_pos, { ratio_paren: ratioParen });
+    else if (ptt === "pos") res = t.res_ptt_only;
+    else if (drvvt === "pos") res = fill(t.res_drvvt_only, { ratio_paren: ratioParen });
+    else res = t.res_both_neg;
+
+    var performed = values.apa_performed === "yes";
+    var abIds = ["acl_igg", "acl_igm", "b2_igg", "b2_igm"];
+    var enteredAb = abIds.filter(function (id) { return isNum(values[id]); });
+    var elevated = enteredAb.filter(function (id) { var a = analyteById(panel, id); return a.high != null && Number(values[id]) > a.high; });
+    var sig = enteredAb.filter(function (id) { var a = analyteById(panel, id); return a.sig != null && Number(values[id]) > a.sig; });
+    var normalEntered = enteredAb.filter(function (id) { return elevated.indexOf(id) < 0; });
+    var nm = function (id) { return names[id] || analyteById(panel, id).label; };
+
+    // APA clause — only describes antibodies that were actually resulted.
+    var apaPhrase = "";
+    if (performed && enteredAb.length) {
+      if (elevated.length === 0) {
+        apaPhrase = (enteredAb.length === abIds.length)
+          ? t.apa_all_normal
+          : "The " + joinList(normalEntered.map(nm)) + (normalEntered.length > 1 ? " are normal." : " is normal.");
+      } else {
+        var elevPhr = elevated.map(function (id) { var a = analyteById(panel, id); return nm(id) + " (" + fmt(a, values[id]) + ")"; });
+        var s = "The " + joinList(elevPhr) + (elevated.length > 1 ? " are elevated" : " is elevated");
+        s += normalEntered.length
+          ? ", while " + joinList(normalEntered.map(function (id) { return "the " + nm(id); })) + (normalEntered.length > 1 ? " are normal." : " is normal.")
+          : ".";
+        apaPhrase = s;
+      }
+    }
+
+    // conclusion — additive: a significant APA is reported even with a positive LA.
+    var concl;
+    if (laPos) {
+      concl = t.concl_pos;
+      if (performed && sig.length) concl += " " + fill(t.concl_sig_apa_addon, { antibody: joinList(sig.map(nm)) });
+    } else if (performed && sig.length) {
+      concl = fill(t.concl_sig_apa, { antibody: joinList(sig.map(nm)) });
+    } else if (performed && elevated.length) {
+      concl = fill(t.concl_neg_nonsig, { antibody: joinList(elevated.map(nm)) });
+    } else {
+      concl = t.concl_neg;
+    }
+
+    var para1 = (t.intro + res + (apaPhrase ? apaPhrase : "")).replace(/\s+$/, "");
+    return para1 + "\n\n" + concl;
+  }
+
+  // ---- generic rule-based prose (hypercoagulability, bleeding diathesis…) ----
+  function capFirst(s) { if (!s) return s; if (/[A-Z]/.test(s.charAt(1))) return s; return s.charAt(0).toUpperCase() + s.slice(1); }
+  function matchWhen(when, sv) {
+    for (var k in when) { var v = (sv[k] != null ? sv[k] : "not_done"); if (when[k].indexOf(v) < 0) return false; }
+    return true;
+  }
+  function buildGeneric(panel, values) {
+    var t = panel.templates || {};
+    var normals = [], abnormal = [], sv = {}, anyEntered = false;
+    (panel.analytes || []).forEach(function (a) {
+      var val;
+      if (a.type === "number") {
+        if (!isNum(values[a.id])) { sv[a.id] = "not_done"; return; }
+        var st = classifyNumber(a, values[a.id]);
+        val = st.kind === "normal" ? "normal" : (st.kind === "low" ? "low" : "high");
+        sv[a.id] = val; anyEntered = true;
+        var disp = fmt(a, values[a.id]) + (a.unit === "%" ? "%" : (a.unit ? " " + a.unit : ""));
+        if (st.kind === "normal") normals.push(a.label);
+        else abnormal.push(a.report || ("The " + a.label + " (" + disp + ") is " + (st.kind === "low" ? "decreased." : "increased.")));
+        return;
+      }
+      val = values[a.id] || "not_done"; sv[a.id] = val;
+      var opt = (a.options || []).filter(function (o) { return o.v === val; })[0];
+      if (!opt || opt.kind === "skip") return;
+      anyEntered = true;
+      if (opt.kind === "normal") normals.push(a.label);
+      else abnormal.push(opt.report || ("The " + a.label + " is abnormal."));
+    });
+    if (!anyEntered) return t.empty || "No results have been entered for this panel.";
+
+    var imps = [];
+    (panel.rules || []).forEach(function (r) { if (matchWhen(r.when, sv)) imps.push(r.impression); });
+    var caveats = [];
+    (panel.caveats || []).forEach(function (c) { if (matchWhen(c.when, sv)) caveats.push(c.text); });
+
+    var para = (t.intro || "Laboratory testing is performed.");
+    if (abnormal.length) para += " " + abnormal.join(" ");
+    if (normals.length) para += " " + capFirst(joinList(normals)) + (normals.length > 1 ? " are within normal limits." : " is within normal limits.");
+    var out = [para.trim()];
+    out.push(imps.length ? imps.join(" ") : (t.concl_none || "No specific diagnostic pattern is identified among the tested analytes; correlate with the clinical picture."));
+    if (caveats.length) out.push("Note: " + caveats.join(" "));
+    return out.join("\n\n");
+  }
+
+  var BUILDERS = { vwd: buildVWD, lupus_ac: buildLA };
+
+  function buildReport(panel, values, demographics) {
+    var builder = BUILDERS[panel.id] || buildGeneric;   // any other panel uses the generic rule engine
+    var body = builder(panel, values || {});
+    var sig = panel.signature ? "\n\n" + panel.signature : "";
+    var heading = panel.heading || (panel.title || "").toUpperCase();
+    var d = demographics || {}, demoLines = [];
+    if (d.name) demoLines.push("Patient: " + d.name);
+    var idbits = [];
+    if (d.mrn) idbits.push("MRN " + d.mrn);
+    if (d.accession) idbits.push("Accession " + d.accession);
+    if (d.dob) idbits.push("DOB " + d.dob);
+    if (d.collected) idbits.push("Collected " + d.collected);
+    if (idbits.length) demoLines.push(idbits.join("   "));
+    var headerBlock = (demoLines.length ? demoLines.join("\n") + "\n\n" : "");
+    return { heading: heading, body: body, signature: panel.signature || "", header: headerBlock, full: headerBlock + heading + "\n\n" + body + sig + "\n" };
+  }
+
+  var api = {
+    isNum: isNum, classify: classify, classifyNumber: classifyNumber, classifyChoice: classifyChoice,
+    colorOf: colorOf, fmt: fmt, fill: fill, joinList: joinList,
+    buildVWD: buildVWD, buildLA: buildLA, buildGeneric: buildGeneric, buildReport: buildReport
+  };
+  root.CoagEngine = api;
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+})(typeof window !== "undefined" ? window : this);
+
+/* Coag Reporter — UI + state. Plain script (no modules) so it runs from a
+ * double-clicked file. Uses CoagEngine (engine.js) and DEFAULT_PANELS (panels.js).
+ * All data is stored locally (localStorage); nothing leaves the machine.
+ *
+ * Data model (v2): batches → patients → results.
+ *   store.batches[] = { id, name, createdAt, patients[] }
+ *   patient        = { id, demo, panelId, values }
+ * A batch is a "run of the day": add many patients, then generate ONE combined
+ * Word/PDF for the whole batch (or copy/export each patient individually). */
+(function () {
+  "use strict";
+  var E = window.CoagEngine;
+  var KEY = "coagReporter.v1";
+
+  // ---------- state ----------
+  var store = load();
+  function freshStore() { return { v: 2, batches: [], currentBatchId: null, currentPatientId: null, config: { panels: {} }, view: "patient" }; }
+  function migrateV1(s) {
+    var b = { id: bid(), name: "Imported", createdAt: Date.now(), patients: s.patients || [] };
+    return { v: 2, batches: [b], currentBatchId: b.id, currentPatientId: s.currentId || (b.patients[0] && b.patients[0].id) || null, config: s.config || { panels: {} }, view: "patient" };
+  }
+  function load() {
+    try {
+      var s = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (s && Array.isArray(s.batches)) return s;          // v2
+      if (s && Array.isArray(s.patients)) return migrateV1(s); // v1 → v2
+    } catch (e) {}
+    return freshStore();
+  }
+  var saveTimer = null, saveWarned = false;
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      try { localStorage.setItem(KEY, JSON.stringify(store)); saveWarned = false; }
+      catch (e) { if (!saveWarned) { saveWarned = true; toast("⚠ Save failed — data is NOT being stored. Export now (Settings)."); } }
+    }, 120);
+  }
+  function statusWord(s) { return { ok: "all in range", warn: "abnormal result", bad: "significant / critical", neutral: "no results yet" }[s] || ""; }
+  function statusGlyph(s) { return { ok: "✓", warn: "!", bad: "‼", neutral: "·" }[s] || "·"; }
+  function uid() { return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function bid() { return "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function nowDate() { var d = new Date(); return d.toISOString().slice(0, 10); }
+
+  // ---------- panels ----------
+  function mergedPanels() {
+    return window.DEFAULT_PANELS.map(function (p) {
+      var cfg = (store.config.panels || {})[p.id] || {};
+      var panel = JSON.parse(JSON.stringify(p));
+      if (cfg.signature != null) panel.signature = cfg.signature;
+      if (cfg.heading != null) panel.heading = cfg.heading;
+      if (cfg.templates) for (var k in cfg.templates) panel.templates[k] = cfg.templates[k];
+      if (cfg.ranges) panel.analytes.forEach(function (a) {
+        var r = cfg.ranges[a.id]; if (!r) return;
+        ["low", "high", "sig"].forEach(function (f) { if (r[f] !== undefined && r[f] !== "") a[f] = Number(r[f]); else if (r[f] === "") a[f] = null; });
+      });
+      return panel;
+    });
+  }
+  function getPanel(id) { return mergedPanels().filter(function (p) { return p.id === id; })[0] || mergedPanels()[0]; }
+
+  // ---------- batches & patients ----------
+  function currentBatch() { return store.batches.filter(function (b) { return b.id === store.currentBatchId; })[0] || null; }
+  function current() { var b = currentBatch(); return b ? (b.patients.filter(function (p) { return p.id === store.currentPatientId; })[0] || null) : null; }
+  function newBatch() {
+    var b = { id: bid(), name: "Run " + nowDate(), createdAt: Date.now(), patients: [] };
+    store.batches.unshift(b); store.currentBatchId = b.id; store.view = "patient";
+    newPatient(); // start with one patient ready for entry
+    return b;
+  }
+  function newPatient(copyFrom) {
+    var b = currentBatch(); if (!b) { return newBatch().patients[0]; }
+    var p = {
+      id: uid(),
+      demo: copyFrom ? Object.assign({}, copyFrom.demo, { name: "", mrn: "", accession: "" }) : { name: "", mrn: "", accession: "", dob: "", collected: nowDate() },
+      panelId: copyFrom ? copyFrom.panelId : (b.patients[0] ? b.patients[0].panelId : "vwd"),
+      values: {}, createdAt: Date.now(), updatedAt: Date.now()
+    };
+    b.patients.unshift(p); store.currentPatientId = p.id; store.view = "patient"; save();
+    return p;
+  }
+  function patientLabel(p) { return (p.demo && p.demo.name) ? p.demo.name : (p.demo && p.demo.accession ? p.demo.accession : "Unnamed patient"); }
+  function patientStatus(p) {
+    var panel = getPanel(p.panelId), worst = "neutral";
+    panel.analytes.forEach(function (a) {
+      var c = E.colorOf(E.classify(a, p.values[a.id]).kind);
+      if (c === "bad") worst = "bad"; else if (c === "warn" && worst !== "bad") worst = "warn"; else if (c === "ok" && worst === "neutral") worst = "ok";
+    });
+    return worst;
+  }
+  function batchStatus(b) {
+    var worst = "neutral";
+    (b.patients || []).forEach(function (p) { var s = patientStatus(p); if (s === "bad") worst = "bad"; else if (s === "warn" && worst !== "bad") worst = "warn"; else if (s === "ok" && worst === "neutral") worst = "ok"; });
+    return worst;
+  }
+
+  // ---------- DOM helper ----------
+  function h(tag, attrs) {
+    var el = document.createElement(tag); attrs = attrs || {};
+    for (var k in attrs) {
+      if (k === "class") el.className = attrs[k];
+      else if (k === "text") el.textContent = attrs[k];
+      else if (k.slice(0, 2) === "on") el.addEventListener(k.slice(2).toLowerCase(), attrs[k]);
+      else if (attrs[k] != null) el.setAttribute(k, attrs[k]);
+    }
+    for (var i = 2; i < arguments.length; i++) {
+      var c = arguments[i]; if (c == null) continue;
+      if (Array.isArray(c)) c.forEach(function (x) { if (x != null) el.appendChild(typeof x === "string" ? document.createTextNode(x) : x); });
+      else el.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+    }
+    return el;
+  }
+  function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); return n; }
+
+  function visible(a, values) { if (!a.showWhen) return true; for (var k in a.showWhen) if (values[k] !== a.showWhen[k]) return false; return true; }
+  function pruneHidden(p, panel) { panel.analytes.forEach(function (a) { if (!visible(a, p.values)) delete p.values[a.id]; }); }
+
+  // ---------- render ----------
+  var root;
+  function render() {
+    root = root || document.getElementById("app");
+    clear(root);
+    root.appendChild(topbar());
+    root.appendChild(sidebar());
+    var main = h("main", { class: "main" });
+    main.appendChild(store.view === "settings" ? settingsView() : patientView());
+    root.appendChild(main);
+    save();
+  }
+
+  function topbar() {
+    var b = currentBatch();
+    var pts = b ? b.patients : [];
+    var idx = pts.findIndex(function (p) { return p.id === store.currentPatientId; });
+    var sel = h("select", { class: "batch-select", "aria-label": "Active batch", onChange: function (e) { switchBatch(e.target.value); } });
+    store.batches.forEach(function (bt) {
+      var o = h("option", { value: bt.id }, bt.name + " (" + bt.patients.length + ")");
+      if (bt.id === store.currentBatchId) o.setAttribute("selected", "");
+      sel.appendChild(o);
+    });
+    return h("div", { class: "topbar" },
+      h("div", { class: "brand" }, "Coag Reporter", h("small", {}, "local · no PHI leaves this PC")),
+      h("span", { class: "tb-label" }, "Batch:"), sel,
+      h("button", { class: "btn sm", onClick: function () { newBatch(); render(); } }, "＋ New batch"),
+      h("div", { class: "spacer", style: "flex:1" }),
+      h("button", { class: "btn sm", title: "Previous patient", "aria-label": "Previous patient", disabled: idx <= 0 ? "" : null, onClick: function () { if (idx > 0) { store.currentPatientId = pts[idx - 1].id; render(); } } }, "‹"),
+      h("button", { class: "btn sm", title: "Next patient", "aria-label": "Next patient", disabled: (idx < 0 || idx >= pts.length - 1) ? "" : null, onClick: function () { if (idx >= 0 && idx < pts.length - 1) { store.currentPatientId = pts[idx + 1].id; render(); } } }, "›"),
+      h("button", { class: "btn ghost", "aria-pressed": store.view === "settings" ? "true" : "false", onClick: function () { store.view = store.view === "settings" ? "patient" : "settings"; render(); } }, "⚙ Settings")
+    );
+  }
+  function switchBatch(id) { store.currentBatchId = id; var b = currentBatch(); store.currentPatientId = b && b.patients[0] ? b.patients[0].id : null; store.view = "patient"; render(); }
+
+  function sidebar() {
+    var sb = h("aside", { class: "sidebar" });
+    var b = currentBatch();
+    if (!b) return sb;
+    // batch header: editable name + batch-level report actions
+    sb.appendChild(h("div", { class: "batch-head" },
+      h("input", { class: "batch-name", value: b.name, "aria-label": "Batch name", onInput: function (e) { b.name = e.target.value; save(); } }),
+      h("div", { class: "batch-actions" },
+        h("button", { class: "btn sm primary", onClick: function () { downloadBatchDoc(b); } }, "📄 Batch Word"),
+        h("button", { class: "btn sm", onClick: function () { batchPrint(b); } }, "🖨 Batch PDF"))));
+    sb.appendChild(h("div", { class: "plist-head" },
+      h("h2", {}, "Patients (" + b.patients.length + ")"),
+      h("button", { class: "btn sm", "aria-label": "New patient", title: "New patient", onClick: function () { newPatient(); render(); } }, "＋")));
+    if (!b.patients.length) sb.appendChild(h("p", { class: "muted", style: "padding:8px" }, "No patients yet. Click ＋ to add one."));
+    b.patients.forEach(function (p) {
+      var panel = getPanel(p.panelId), seld = p.id === store.currentPatientId, stt = patientStatus(p);
+      sb.appendChild(h("button", { class: "pitem" + (seld ? " sel" : ""), "aria-current": seld ? "true" : null, onClick: function () { store.currentPatientId = p.id; store.view = "patient"; render(); } },
+        h("div", { class: "pname" }, patientLabel(p)),
+        h("div", { class: "pmeta" }, h("span", { class: "dot " + stt, role: "img", "aria-label": "Status: " + statusWord(stt) }, statusGlyph(stt)), (panel ? panel.title : p.panelId))));
+    });
+    if (store.batches.length > 1) sb.appendChild(h("button", { class: "btn ghost sm", style: "margin-top:10px;width:100%", onClick: function () { deleteBatch(b); } }, "🗑 Delete this batch"));
+    return sb;
+  }
+  function deleteBatch(b) {
+    if (!confirm('Delete the entire batch "' + b.name + '" and its ' + b.patients.length + ' patient(s)?')) return;
+    store.batches = store.batches.filter(function (x) { return x.id !== b.id; });
+    if (!store.batches.length) newBatch(); else switchBatch(store.batches[0].id);
+    render();
+  }
+
+  function patientView() {
+    var p = current();
+    if (!p) return h("div", { class: "empty" }, h("p", {}, "No patient selected."), h("button", { class: "btn primary", onClick: function () { newPatient(); render(); } }, "＋ Add a patient"));
+    var panel = getPanel(p.panelId);
+    var left = h("div", { class: "entry-col" }, demoCard(p), panelCard(p), entryCard(p, panel));
+    return h("div", { class: "wrap" }, left, reportCard(p, panel));
+  }
+
+  function demoCard(p) {
+    function f(key, label, type) {
+      var id = "demo_" + key;
+      return h("div", { class: "field" }, h("label", { for: id }, label),
+        h("input", { id: id, type: type || "text", value: p.demo[key] || "", onInput: function (e) { p.demo[key] = e.target.value; p.updatedAt = Date.now(); save(); refreshReport(p); refreshSidebarName(p); } }));
+    }
+    return h("section", { class: "card" }, h("h2", {}, "Patient"),
+      h("div", { class: "demo-grid" }, f("name", "Name"), f("mrn", "MRN"), f("accession", "Accession #"), f("dob", "Date of birth", "date"), f("collected", "Collected", "date")));
+  }
+
+  function panelCard(p) {
+    var pick = h("div", { class: "panelpick" });
+    mergedPanels().forEach(function (panel) {
+      pick.appendChild(h("button", { class: "btn", "aria-pressed": p.panelId === panel.id ? "true" : "false", onClick: function () { p.panelId = panel.id; p.updatedAt = Date.now(); render(); } }, panel.title));
+    });
+    return h("section", { class: "card" }, h("h2", {}, "Report type"), pick);
+  }
+
+  function entryCard(p, panel) {
+    var card = h("section", { class: "card" }, h("h2", {}, "Results"));
+    panel.analytes.forEach(function (a) { if (visible(a, p.values)) card.appendChild(analyteRow(p, panel, a)); });
+    return card;
+  }
+
+  function analyteRow(p, panel, a) {
+    var color = E.colorOf(E.classify(a, p.values[a.id]).kind);
+    var row = h("div", { class: "arow " + color, id: "row_" + a.id });
+    var refTxt = a.type === "number"
+      ? "Ref: " + (a.low != null ? a.low : "") + (a.low != null && a.high != null ? "–" : "") + (a.high != null ? a.high : (a.high == null && a.low != null ? "+" : "")) + (a.unit ? " " + a.unit : "") + (a.sig != null ? "  ·  significant >" + a.sig : "") : "";
+    row.appendChild(h("div", {}, h("div", { class: "alabel" }, a.label), refTxt ? h("div", { class: "aref" }, refTxt) : null));
+    var ctl = h("div", { class: "actl" });
+    if (a.type === "number") {
+      var inp = h("input", { type: "number", inputmode: "decimal", step: a.decimals ? "0.1" : "1", value: p.values[a.id] != null ? p.values[a.id] : "", "aria-label": a.label, id: "in_" + a.id });
+      inp.addEventListener("input", function () { setValue(p, a.id, inp.value); });
+      function bump(d) { var v = Number(inp.value || 0) + d; v = a.decimals ? Math.round(v * 10) / 10 : v; inp.value = v; setValue(p, a.id, inp.value); }
+      ctl.appendChild(h("div", { class: "num" },
+        h("button", { type: "button", "aria-label": "decrease " + a.label, onClick: function () { bump(a.decimals ? -0.1 : -1); } }, "−"),
+        inp, h("button", { type: "button", "aria-label": "increase " + a.label, onClick: function () { bump(a.decimals ? 0.1 : 1); } }, "＋")));
+      if (a.unit) ctl.appendChild(h("span", { class: "unit" }, a.unit));
+      ctl.appendChild(chipFor(a, p.values[a.id]));
+    } else {
+      var chg = h("div", { class: "choice", role: "group", "aria-label": a.label });
+      (a.options || []).forEach(function (o) {
+        chg.appendChild(h("button", { type: "button", "data-kind": o.kind, "aria-pressed": p.values[a.id] === o.v ? "true" : "false",
+          onClick: function () { p.values[a.id] = (p.values[a.id] === o.v ? "" : o.v); p.updatedAt = Date.now(); pruneHidden(p, getPanel(p.panelId)); render(); } }, o.label));
+      });
+      ctl.appendChild(chg);
+    }
+    row.appendChild(ctl);
+    return row;
+  }
+
+  function chipFor(a, val) {
+    var st = E.classify(a, val), color = E.colorOf(st.kind);
+    var label = { none: "—", normal: "In range", low: "Low ↓", high: "High ↑", sig: "Significant ‼", abnormal: "Positive", skip: "—", invalid: "Invalid ⚠" }[st.kind] || "—";
+    return h("span", { class: "chip " + color, id: "chip_" + a.id, role: "status", "aria-live": "polite", "aria-atomic": "true", "aria-label": a.label + ": " + label }, label);
+  }
+
+  function setValue(p, id, val) {
+    p.values[id] = val; p.updatedAt = Date.now(); save();
+    var a = getPanel(p.panelId).analytes.filter(function (x) { return x.id === id; })[0];
+    var row = document.getElementById("row_" + id);
+    if (row && a) { row.className = "arow " + E.colorOf(E.classify(a, val).kind); var chip = document.getElementById("chip_" + id); if (chip) chip.replaceWith(chipFor(a, val)); }
+    refreshReport(p); refreshSidebarDot(p);
+  }
+  function refreshSidebarDot(p) {
+    var dot = document.querySelector(".sidebar .pitem.sel .dot"); if (!dot) return;
+    var s = patientStatus(p); dot.className = "dot " + s; dot.textContent = statusGlyph(s); dot.setAttribute("aria-label", "Status: " + statusWord(s));
+  }
+  function refreshSidebarName(p) {
+    if (p.id !== store.currentPatientId) return;
+    var nm = document.querySelector(".sidebar .pitem.sel .pname"); if (nm) nm.textContent = patientLabel(p);
+  }
+
+  function reportCard(p, panel) {
+    var card = h("section", { class: "card", id: "reportcard" }, h("h2", {}, "Report", panel.draft ? h("span", { class: "draft-badge", title: "Drafted from your TM·Coag panel — review and edit the wording in Settings" }, "DRAFT") : null));
+    card.appendChild(h("div", { class: "report-actions" },
+      h("button", { class: "btn primary", onClick: function () { copyReport(p, panel); } }, "⧉ Copy"),
+      h("button", { class: "btn", onClick: function () { downloadDoc(p, panel); } }, "⬇ Word (.doc)"),
+      h("button", { class: "btn", onClick: function () { singlePrint(p); } }, "🖨 Print / PDF"),
+      h("div", { class: "spacer", style: "flex:1" }),
+      h("button", { class: "btn ghost sm", onClick: function () { newPatient(p); render(); } }, "⧉ Duplicate"),
+      h("button", { class: "btn ghost sm", onClick: function () { deletePatient(p); } }, "🗑 Delete")));
+    card.appendChild(h("div", { class: "report", id: "reporttext", role: "region", "aria-label": "Generated report", "aria-live": "polite", "aria-atomic": "true" }, reportText(p, panel)));
+    return card;
+  }
+  function deletePatient(p) {
+    if (!confirm("Delete this patient?")) return;
+    var b = currentBatch(); b.patients = b.patients.filter(function (x) { return x.id !== p.id; });
+    if (!b.patients.length) newPatient(); else store.currentPatientId = b.patients[0].id;
+    render();
+  }
+  function reportText(p, panel) { return E.buildReport(panel, p.values, p.demo).full; }
+  function refreshReport(p) { var el = document.getElementById("reporttext"); if (el) el.textContent = reportText(p, getPanel(p.panelId)); }
+
+  // ---------- exports ----------
+  function escapeHtml(t) { return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
+  function copyReport(p, panel) {
+    var txt = reportText(p, panel);
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function () { toast("Report copied"); }, function () { fallbackCopy(txt); });
+    else fallbackCopy(txt);
+  }
+  function fallbackCopy(txt) { var ta = document.createElement("textarea"); ta.value = txt; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); toast("Report copied"); } catch (e) { toast("Copy failed — select manually"); } ta.remove(); }
+
+  function docHtml(bodyHtml) { return "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset='utf-8'></head><body style=\"font-family:Calibri,Arial,sans-serif;font-size:11pt\">" + bodyHtml + "</body></html>"; }
+  function downloadDoc(p, panel) {
+    var html = docHtml(escapeHtml(reportText(p, panel)).replace(/\n/g, "<br>"));
+    download(new Blob(["﻿", html], { type: "application/msword" }), fileBase(p, panel) + ".doc");
+    toast("Word document downloaded");
+  }
+  function downloadBatchDoc(b) {
+    if (!b.patients.length) { toast("This batch has no patients yet."); return; }
+    var brk = "<div style='page-break-before:always'></div>";
+    var parts = b.patients.map(function (p) { return escapeHtml(reportText(p, getPanel(p.panelId))).replace(/\n/g, "<br>"); });
+    download(new Blob(["﻿", docHtml(parts.join(brk))], { type: "application/msword" }), safeName(b.name) + "_batch.doc");
+    toast("Batch Word document downloaded (" + b.patients.length + " reports)");
+  }
+  function singlePrint(p) { batchPrint({ name: "", patients: [p] }); }
+  function batchPrint(b) {
+    if (!b.patients.length) { toast("This batch has no patients yet."); return; }
+    var pr = h("div", { class: "print-batch" });
+    b.patients.forEach(function (p) { pr.appendChild(h("div", { class: "report-page" }, reportText(p, getPanel(p.panelId)))); });
+    document.body.appendChild(pr); document.body.classList.add("batch-print");
+    function cleanup() { document.body.classList.remove("batch-print"); if (pr.parentNode) pr.parentNode.removeChild(pr); window.removeEventListener("afterprint", cleanup); }
+    window.addEventListener("afterprint", cleanup);
+    window.print(); setTimeout(cleanup, 3000);
+  }
+  function fileBase(p, panel) { return safeName(p.demo.name || p.demo.accession || "report") + "_" + panel.id; }
+  function safeName(s) { return String(s || "report").replace(/[^a-z0-9_\- ]/gi, "").trim().replace(/\s+/g, "_") || "report"; }
+  function download(blob, name) { var u = URL.createObjectURL(blob); var a = document.createElement("a"); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1000); }
+
+  function exportCasebook() { download(new Blob([JSON.stringify(store, null, 2)], { type: "application/json" }), "coag_casebook_" + nowDate() + ".json"); toast("Casebook exported"); }
+  function importCasebook(file) {
+    var r = new FileReader();
+    r.onload = function () {
+      try {
+        var s = JSON.parse(r.result);
+        if (s && Array.isArray(s.patients) && !s.batches) s = migrateV1(s);
+        if (!s || !Array.isArray(s.batches)) throw new Error("not a casebook");
+        s.config = (s.config && s.config.panels) ? s.config : { panels: {} };
+        s.batches.forEach(function (b) { if (!b.id) b.id = bid(); b.patients = b.patients || []; b.patients.forEach(function (p) { p.demo = p.demo || {}; p.values = p.values || {}; if (!p.id) p.id = uid(); if (!p.panelId) p.panelId = "vwd"; }); });
+        if (!s.batches.some(function (b) { return b.id === s.currentBatchId; })) s.currentBatchId = s.batches[0] ? s.batches[0].id : null;
+        store = s; if (!store.batches.length) newBatch();
+        var cb = currentBatch(); store.currentPatientId = cb && cb.patients[0] ? cb.patients[0].id : null;
+        render();
+        toast("Casebook imported (" + store.batches.length + " batch[es])");
+      } catch (e) { toast("Could not read that file — casebook unchanged"); }
+    };
+    r.readAsText(file);
+  }
+
+  // ---------- settings ----------
+  function settingsView() {
+    var wrap = h("div", { class: "wrap settings" });
+    wrap.appendChild(h("section", { class: "card full" }, h("h2", {}, "Casebook (all data is stored only on this computer)"),
+      h("div", { class: "report-actions" },
+        h("button", { class: "btn", onClick: exportCasebook }, "⬇ Export casebook (.json)"),
+        (function () { var inp = h("input", { type: "file", accept: ".json", style: "display:none", onChange: function (e) { if (e.target.files[0]) importCasebook(e.target.files[0]); } }); return h("span", {}, h("button", { class: "btn", onClick: function () { inp.click(); } }, "⬆ Import casebook"), inp); })(),
+        h("button", { class: "btn ghost", onClick: function () { if (confirm("Reset template/range customizations to defaults? (Patients are kept.)")) { store.config = { panels: {} }; render(); } } }, "↺ Reset templates"))));
+    mergedPanels().forEach(function (panel) {
+      store.config.panels[panel.id] = store.config.panels[panel.id] || {}; var cfg = store.config.panels[panel.id]; cfg.ranges = cfg.ranges || {};
+      var sec = h("section", { class: "card full" }, h("h2", {}, "Edit: " + panel.title));
+      sec.appendChild(h("div", { class: "tpl-row" }, h("label", {}, "Signature line"), h("input", { class: "range", style: "width:280px;min-height:40px", value: panel.signature || "", onInput: function (e) { cfg.signature = e.target.value; save(); } })));
+      sec.appendChild(h("h3", { style: "margin:14px 0 6px;font-size:13px" }, "Reference ranges & thresholds"));
+      panel.analytes.filter(function (a) { return a.type === "number"; }).forEach(function (a) {
+        cfg.ranges[a.id] = cfg.ranges[a.id] || {};
+        function rng(field, lbl) { return h("div", { class: "field" }, h("label", {}, lbl), h("input", { class: "range", type: "number", step: "0.1", value: a[field] != null ? a[field] : "", onInput: function (e) { cfg.ranges[a.id][field] = e.target.value; save(); } })); }
+        sec.appendChild(h("div", { class: "range-row" }, h("div", { style: "min-width:220px;font-weight:650" }, a.label + (a.unit ? " (" + a.unit + ")" : "")), rng("low", "Low"), rng("high", "High"), (a.sig != null) ? rng("sig", "Significant >") : null));
+      });
+      sec.appendChild(h("h3", { style: "margin:16px 0 6px;font-size:13px" }, "Report wording (use {placeholders} — they auto-fill with entered values)"));
+      Object.keys(panel.templates).forEach(function (key) { cfg.templates = cfg.templates || {}; sec.appendChild(h("div", { class: "tpl-row" }, h("label", {}, key), h("textarea", { onInput: function (e) { cfg.templates[key] = e.target.value; save(); } }, panel.templates[key]))); });
+      wrap.appendChild(sec);
+    });
+    return wrap;
+  }
+
+  // ---------- toast ----------
+  var toastEl;
+  function toast(msg) {
+    toastEl = toastEl || document.body.appendChild(h("div", { class: "toast", role: "status", "aria-live": "polite", "aria-atomic": "true" }));
+    toastEl.textContent = msg; toastEl.classList.add("show"); clearTimeout(toastEl._t); toastEl._t = setTimeout(function () { toastEl.classList.remove("show"); }, 1600);
+  }
+
+  // Plain Ctrl/Cmd+P prints the current patient cleanly (buttons build their own overlay first).
+  window.addEventListener("beforeprint", function () {
+    if (document.querySelector(".print-batch")) return;
+    var p = current(); if (!p) return;
+    document.body.appendChild(h("div", { class: "print-batch", "data-auto": "1" }, h("div", { class: "report-page" }, reportText(p, getPanel(p.panelId)))));
+    document.body.classList.add("batch-print");
+  });
+  window.addEventListener("afterprint", function () {
+    var auto = document.querySelector('.print-batch[data-auto="1"]'); if (auto) { document.body.classList.remove("batch-print"); auto.remove(); }
+  });
+
+  // ---------- boot ----------
+  if (!store.batches.length) newBatch();
+  if (!store.currentBatchId) store.currentBatchId = store.batches[0].id;
+  if (!current()) { var b0 = currentBatch(); store.currentPatientId = b0.patients[0] ? b0.patients[0].id : (newPatient(), currentBatch().patients[0].id); }
+  render();
+})();
+
+  </script>
+</body>
+</html>
