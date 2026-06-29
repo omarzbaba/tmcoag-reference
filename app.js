@@ -8,7 +8,7 @@ const searchEl = document.getElementById("search");
 const state = { route: "asfa", q: "", sel: null };
 // module-local filters + the blood-prep calculator state
 const flt = { asfaCat: "", asfaSys: "" };
-const bp = { surgery: null, hgb: "", race: "other", abs: new Set() };
+const bp = { surgery: null, hgb: "", race: "other", abo: "", abs: new Set() };
 
 // ---------- tiny DOM helper ----------
 function el(tag, attrs, ...kids) {
@@ -158,8 +158,18 @@ const HGB_RULES = {
   "7to8": [1, 2, "Hemoglobin 7–7.9 g/dL — at/near the usual transfusion threshold; prepare units."],
   lt7: [2, 2, "Hemoglobin <7 g/dL — transfusion likely; ensure units are crossmatched and ready."],
 };
+function aboFraction(recipient, race) {
+  const abo = (KB.bloodprep || {}).abo; if (!abo) return null;
+  const groups = (abo.rbc_compatible || {})[recipient], freq = abo.freq || {};
+  if (!groups || !Object.keys(freq).length) return null;
+  const frac = (t) => groups.reduce((s, g) => s + Number(t[g] || 0), 0) / 100;
+  if (freq[race]) return frac(freq[race]);
+  const vals = Object.values(freq).map(frac);
+  return vals.length ? Math.min(...vals) : null;
+}
 function computeBloodPrep() {
   const surgery = bp.surgery, race = bp.race || "other";
+  const recipientAbo = bp.abo || "", aboFrac = recipientAbo ? aboFraction(recipientAbo, race) : null;
   const idx = Object.fromEntries((KB.bloodprep.antigens || []).map((a) => [a.code, a]));
   const chosen = [...bp.abs].map((c) => idx[c]).filter(Boolean);
   const significant = chosen.filter((a) => a.significant), nonSig = chosen.filter((a) => !a.significant);
@@ -187,7 +197,7 @@ function computeBloodPrep() {
     combined *= frac; rhLink = { frac, naive, codes };
   }
   if (nonSig.length) caveats.push(`${nonSig.map((a) => a.name).join(", ")}: usually not clinically significant — antigen-negative units generally not required unless reactive at 37 °C / AHG. Confirm clinical significance.`);
-  let unitsToPrepare, combinedPct, unitsToScreen;
+  let unitsToPrepare, combinedPct, unitsToScreen, combinedAllPct = null, unitsToScreenRandom = null;
   if (significant.length) {
     const ags = significant.map((a) => a.name.replace("Anti-", "")).join(", ");
     unitsToPrepare = Math.max(units, 2);
@@ -199,6 +209,15 @@ function computeBloodPrep() {
     if (rhLink) findings.push(`Rh antigens are inherited as linked haplotypes (R⁰/R¹/R²/r), so the combined Rh-negative frequency is derived from haplotype frequencies: ~${fmtPct(rhLink.frac * 100)} of donors are negative for ${rhLink.codes.join("/")} — not ~${fmtPct(rhLink.naive * 100)} that naively multiplying the single-antigen rates would suggest.`);
     if (unitsToScreen != null) recs.push(`Expect to screen ~${unitsToScreen} donor unit(s) to find ${unitsToPrepare} compatible (combined antigen-negative frequency ~${fmtPct(combinedPct)}).`);
     else flags.push("No compatible donors by these frequencies — reference lab / rare-donor program required.");
+    // ABO layer: recipient's group limits the donor pool (RBC compatibility); ABO is
+    // independent of the other systems, so it multiplies the antigen-negative frequency.
+    if (recipientAbo && aboFrac != null && aboFrac < 1) {
+      const combinedAll = combined * aboFrac;
+      combinedAllPct = combinedAll * 100;
+      unitsToScreenRandom = combinedAll > 0 ? Math.ceil(unitsToPrepare / combinedAll) : null;
+      findings.push(`Recipient is group ${recipientAbo} — only ~${fmtPct(aboFrac * 100)} of random donors are ABO-compatible, so fully compatible (ABO + antigen-negative) ≈ ${fmtPct(combinedAllPct)} of all random donors` + (unitsToScreenRandom != null ? `; expect to screen ~${unitsToScreenRandom} random unit(s) (vs ~${unitsToScreen} within ABO-matched inventory).` : " — reference lab / rare-donor program required."));
+      if (recipientAbo === "O" && combinedAllPct < 5) flags.push("Group-O recipient with a hard-to-match antibody — the ABO restriction compounds the rarity; involve the reference lab / rare-donor registry early.");
+    }
     if (significant.some((a) => a.high_incidence) || combinedPct < 5) flags.push("VERY rare compatibility (high-incidence antigen or <5% compatible) — involve the blood-bank reference lab and rare-donor registry; allow lead time; consider autologous/family units.");
     else if (combinedPct < 15) flags.push("Limited compatible inventory (<15%) — notify the blood bank early and allow extra lead time.");
     caveats.push("Give antigen-negative units for clinically significant antibodies even if the current screen/titer is negative (anamnestic risk).");
@@ -207,7 +226,7 @@ function computeBloodPrep() {
     recs.push(unitsToPrepare > 0 ? `Crossmatch ${unitsToPrepare} unit(s).` : "Type & screen only; no units need to be crossmatched up front.");
   }
   const approach = unitsToPrepare === 0 ? "Type & screen" : `Crossmatch ${unitsToPrepare} unit(s)`;
-  return { approach, unitsToPrepare, unitsToScreen, combinedPct, perAntibody: chosen.map((a) => ({ name: a.name, code: a.code, system: a.system, pct: negPct(a, race), significant: !!a.significant })), findings, recs, caveats, flags, rhLink };
+  return { approach, unitsToPrepare, unitsToScreen, combinedPct, recipientAbo, aboCompatiblePct: (recipientAbo && aboFrac != null) ? aboFrac * 100 : null, combinedAllPct, unitsToScreenRandom, perAntibody: chosen.map((a) => ({ name: a.name, code: a.code, system: a.system, pct: negPct(a, race), significant: !!a.significant })), findings, recs, caveats, flags, rhLink };
 }
 function renderBloodprep() {
   head("🩸 Blood preparation for the OR", "Pick a procedure, set hemoglobin & ancestry, then click the antibodies — the compatible-donor frequency accounts for Rh haplotype linkage.");
@@ -240,7 +259,10 @@ function renderBloodprep() {
     chip("—", !bp.hgb, () => { bp.hgb = ""; sync(); }), ...arr(data.hgb_bands).map((b) => chip(b.label, bp.hgb === b.value, () => { bp.hgb = b.value; sync(); })));
   const raceRow = el("div", { class: "chiprow" }, el("span", { class: "chiplabel" }, "Ancestry:"),
     ...arr(data.races).map((r) => chip(r.label, bp.race === r.value, () => { bp.race = r.value; sync(); })));
-  ctx.append(hgbRow, raceRow);
+  const aboRow = el("div", { class: "chiprow" }, el("span", { class: "chiplabel" }, "Recipient ABO:"),
+    chip("—", !bp.abo, () => { bp.abo = ""; sync(); }),
+    ...["O", "A", "B", "AB"].map((g) => chip(g, bp.abo === g, () => { bp.abo = bp.abo === g ? "" : g; sync(); })));
+  ctx.append(hgbRow, raceRow, aboRow);
   content.append(ctx);
 
   // --- antibodies (clickable boxes grouped by system) ---
@@ -262,12 +284,19 @@ function renderBloodprep() {
   function paintResult(into) {
     const r = computeBloodPrep();
     into.append(el("h2", {}, "Recommendation"));
-    const kpis = el("div", { class: "kpis" },
+    const sig = r.perAntibody.some((a) => a.significant);
+    const kpiNodes = [
       kpi(r.approach, "approach"),
       kpi(r.unitsToPrepare, r.unitsToPrepare === 1 ? "unit to prepare" : "units to prepare"),
-      r.perAntibody.some((a) => a.significant) ? kpi(fmtPct(r.combinedPct), "compatible donors") : null,
-      (r.unitsToScreen != null && r.perAntibody.some((a) => a.significant)) ? kpi("~" + r.unitsToScreen, "units to screen") : null);
-    into.append(kpis);
+    ];
+    if (sig) kpiNodes.push(kpi(fmtPct(r.combinedPct), "antigen-neg (within ABO inv.)"));
+    if (sig && r.unitsToScreen != null) kpiNodes.push(kpi("~" + r.unitsToScreen, "units to screen"));
+    if (r.combinedAllPct != null) {
+      kpiNodes.push(kpi(fmtPct(r.aboCompatiblePct), "ABO-compatible (grp " + r.recipientAbo + ")"));
+      kpiNodes.push(kpi(fmtPct(r.combinedAllPct), "of ALL random donors"));
+      if (r.unitsToScreenRandom != null) kpiNodes.push(kpi("~" + r.unitsToScreenRandom, "random units to screen"));
+    }
+    into.append(el("div", { class: "kpis" }, kpiNodes));
     if (r.perAntibody.length) {
       const t = el("div", { class: "rows" });
       for (const a of r.perAntibody) t.append(el("div", { class: "row" }, el("div", { class: "row-main" }, el("div", { class: "row-title" }, a.name), el("div", { class: "row-sub" }, a.system)),
