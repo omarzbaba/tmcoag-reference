@@ -277,7 +277,9 @@ const searchEl = document.getElementById("search");
 const state = { route: "asfa", q: "", sel: null };
 // module-local filters + the blood-prep calculator state
 const flt = { asfaCat: "", asfaSys: "" };
-const bp = { surgery: null, hgb: "", race: "other", abo: "", abs: new Set() };
+// race is fixed to White: compatibility frequencies reflect the DONOR pool, which
+// is predominantly White (it isn't a function of the patient's own ancestry).
+const bp = { surgery: null, hgb: "", race: "white", abo: "", abs: new Set() };
 
 // ---------- tiny DOM helper ----------
 function el(tag, attrs, ...kids) {
@@ -522,16 +524,15 @@ function renderBloodprep() {
   renderChosen();
   content.append(pick);
 
-  // --- context: Hgb + race ---
+  // --- context: Hgb + recipient ABO (donor frequencies use the predominant White pool) ---
   const ctx = el("section", { class: "card" }, el("h2", {}, "2 · Context"));
   const hgbRow = el("div", { class: "chiprow" }, el("span", { class: "chiplabel" }, "Hemoglobin:"),
     chip("—", !bp.hgb, () => { bp.hgb = ""; sync(); }), ...arr(data.hgb_bands).map((b) => chip(b.label, bp.hgb === b.value, () => { bp.hgb = b.value; sync(); })));
-  const raceRow = el("div", { class: "chiprow" }, el("span", { class: "chiplabel" }, "Ancestry:"),
-    ...arr(data.races).map((r) => chip(r.label, bp.race === r.value, () => { bp.race = r.value; sync(); })));
   const aboRow = el("div", { class: "chiprow" }, el("span", { class: "chiplabel" }, "Recipient ABO:"),
     chip("—", !bp.abo, () => { bp.abo = ""; sync(); }),
     ...["O", "A", "B", "AB"].map((g) => chip(g, bp.abo === g, () => { bp.abo = bp.abo === g ? "" : g; sync(); })));
-  ctx.append(hgbRow, raceRow, aboRow);
+  ctx.append(hgbRow, aboRow,
+    el("p", { class: "tiny muted", style: "margin:10px 4px 0" }, "Donor-frequency basis: predominant US donor population (White). Antigen-negative, Rh-haplotype, and ABO donor frequencies all use White."));
   content.append(ctx);
 
   // --- antibodies (clickable boxes grouped by system) ---
