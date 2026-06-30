@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TM·Coag Reference — Transfusion Medicine &amp; Coagulation</title>
+  <title>Clinical Decision Support — Henry Ford Health</title>
   <style>
 :root {
   --bg: oklch(98% 0.004 250);
@@ -51,9 +51,10 @@ body {
   backdrop-filter: saturate(180%) blur(12px);
   border-bottom: 1px solid var(--line);
 }
-.brand { display: flex; align-items: baseline; gap: 8px; flex: 0 0 auto; }
-.brand-mark { font-weight: 800; letter-spacing: -0.02em; font-size: 19px; color: var(--ink); }
-.brand-sub { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent); }
+.brand { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; flex: 0 0 auto; line-height: 1.15; }
+.brand-mark { font-weight: 800; letter-spacing: -0.02em; font-size: 16px; color: var(--ink); white-space: nowrap; }
+.brand-sub { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); }
+.nav-foot .credit { margin-top: 8px; color: var(--ink-soft); font-weight: 700; }
 .search-wrap { flex: 1; max-width: 620px; margin: 0 auto; }
 #search {
   width: 100%; padding: 10px 14px; font-size: 15px;
@@ -236,8 +237,8 @@ mark { background: oklch(92% 0.12 95); color: inherit; border-radius: 3px; paddi
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="brand-mark">TM·Coag</span>
-      <span class="brand-sub">Reference</span>
+      <span class="brand-mark">Clinical Decision Support</span>
+      <span class="brand-sub">Henry Ford Health</span>
     </div>
     <div class="search-wrap">
       <input id="search" type="search" placeholder="Search everything — diseases, surgeries, tests, reactions…" autocomplete="off" aria-label="Global search" />
@@ -251,7 +252,8 @@ mark { background: oklch(92% 0.12 95); color: inherit; border-radius: 3px; paddi
       <a class="nav-item" data-route="coag" href="#coag"><span class="nav-emoji">🧪</span> Coag CDS</a>
       <a class="nav-item" data-route="reactions" href="#reactions"><span class="nav-emoji">⚠️</span> Transfusion reactions</a>
       <div class="nav-foot">
-        <p>Educational reference. No patient data. The blood bank medical director / treating physician remains the final decision-maker.</p>
+        <p><strong>For internal use only.</strong> Educational clinical decision support — not a substitute for clinical judgment; the treating physician / blood-bank medical director remains the final decision-maker. No patient data.</p>
+        <p class="credit">Created by Omar Z. Baba, MD · Henry Ford Health</p>
       </div>
     </nav>
 
