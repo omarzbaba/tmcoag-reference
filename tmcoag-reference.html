@@ -25,6 +25,10 @@
   --bad-wash: oklch(96% 0.05 25);
   --info: oklch(55% 0.11 250);
 
+  /* biovigilance-document palette (AABB quick-reference) */
+  --doc-orange: oklch(58% 0.15 45);
+  --doc-teal: oklch(52% 0.08 215);
+
   --radius: 12px;
   --shadow: 0 1px 2px oklch(50% 0.02 260 / 0.06), 0 8px 24px oklch(50% 0.02 260 / 0.06);
   --maxw: 980px;
@@ -234,6 +238,22 @@ mark { background: oklch(92% 0.12 95); color: inherit; border-radius: 3px; paddi
   .cert3 { grid-template-columns: 1fr; }
   .axis2-row { grid-template-columns: 1fr; gap: 3px; }
 }
+
+/* ---- biovigilance-document reaction box ---- */
+.rx-doc { padding: 20px 22px; }
+.rx-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin-bottom: 2px; }
+.rx-name { color: var(--doc-orange); font-size: 20px; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
+.rx-def { margin: 8px 0 4px; line-height: 1.55; }
+.rx-note { margin: 4px 0 6px; font-style: italic; color: var(--doc-teal); font-size: 13.5px; line-height: 1.5; }
+.rx-level { padding: 11px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.rx-lvl-label { font-weight: 800; color: var(--ink); display: block; margin-bottom: 5px; }
+.rx-crit { line-height: 1.5; }
+.rx-crit .rx-conn { color: var(--doc-teal); font-weight: 700; }
+.rx-na { color: var(--ink-faint); }
+.rx-bullets { columns: 2; column-gap: 26px; margin: 7px 0; padding-left: 18px; }
+.rx-bullets li { margin: 3px 0; break-inside: avoid; }
+.rx-bullets li::marker { color: var(--doc-orange); }
+@media (max-width: 640px) { .rx-bullets { columns: 1; } }
 
 /* ---- misc ---- */
 .legend-card summary { cursor: pointer; font-weight: 650; }
@@ -630,11 +650,12 @@ function coagCard(name, t, q) {
 const IMPUT_CLASS = { "Definite (certain)": "cat-IV", "Probable (likely)": "cat-III", "Possible": "cat-II", "Doubtful (unlikely)": "grade", "Ruled out (excluded)": "cat-I", "Not determined": "grade" };
 const CERT_CLASS = { "Definitive": "cat-IV", "Probable": "cat-III", "Possible": "cat-II", "Not determined (Unknown)": "grade" };
 function renderReactions() {
-  head("⚠️ Transfusion reactions & biovigilance", "NHSN / AABB / ISBT case definitions with Definitive / Probable / Possible criteria, severity, and imputability. Search, or tap a reaction.");
+  head("⚠️ Transfusion reactions & biovigilance", "NHSN Hemovigilance Module adverse-reaction definitions (AABB). Tap a reaction for its case definition — Definitive / Probable / Possible. Severity & imputability apply to every reaction (reference below).");
   const r = KB.reactions || {};
-  // the three NHSN axes, as reference cards
+  // severity + imputability are reference scales that apply to EVERY reaction (as in
+  // the biovigilance document), not repeated per entity.
   content.append(el("details", { class: "card legend-card" },
-    el("summary", {}, "The three NHSN axes (certainty · severity · imputability) — overview"),
+    el("summary", {}, "Grading reference — diagnostic certainty · severity · imputability (applies to every reaction)"),
     r._axes_note ? el("div", { class: "block note" }, r._axes_note) : null,
     el("h3", {}, "Diagnostic certainty — case definition"), defList(arr(r.diagnostic_certainty).map((l) => [l.level, l.desc]), (k) => CERT_CLASS[k]),
     el("h3", {}, "Severity"), defList(arr(r.severity).map((g) => [g.grade, g.desc])),
@@ -655,44 +676,47 @@ function reactionCard(rx, q) {
     el("div", { class: "tile-title", html: hl(rx.name, q) }),
     el("div", { class: "tile-sub", html: hl(rx.onset || "", q) }));
 }
-function sevClass(g) { return /Grade 1/.test(g) ? "cat-I" : /Grade 2/.test(g) ? "cat-III" : /Grade [34]/.test(g) ? "cat-IV" : "grade"; }
-function axis2(rows, clsFn) {
-  const t = el("div", { class: "axis2" });
-  for (const [k, v] of rows) t.append(el("div", { class: "axis2-row" }, el("span", { class: "axis2-k badge " + (clsFn ? (clsFn(k) || "grade") : "grade") }, k), el("span", { class: "axis2-v" }, v)));
-  return t;
+// Render an NHSN criteria string the way the biovigilance document does: bracketed
+// lists [a · b · c] become two-column bullet lists; the connective words
+// (AND / OR / EITHER / EXCEPT …) are set in the accent colour.
+function renderCriteria(text) {
+  const wrap = el("div", { class: "rx-crit" });
+  if (!text || text === "N/A") { wrap.append(el("span", { class: "rx-na" }, "N/A")); return wrap; }
+  for (const part of text.split(/(\[[^\]]*\])/)) {
+    if (!part) continue;
+    if (part[0] === "[" && part[part.length - 1] === "]") {
+      const items = part.slice(1, -1).split("·").map((s) => s.trim()).filter(Boolean);
+      const ul = el("ul", { class: "rx-bullets" });
+      for (const it of items) ul.append(el("li", {}, it));
+      wrap.append(ul);
+    } else {
+      const html = esc(part).replace(/(AND EITHER|ANY of|≥2 of|\bAND\b|\bOR\b|\bEITHER\b|\bEXCEPT\b|\bbut\b)/g, '<b class="rx-conn">$1</b>');
+      wrap.append(el("span", { html }));
+    }
+  }
+  return wrap;
 }
 function reactionDetail(rx) {
-  const R = KB.reactions || {};
   content.append(el("button", { class: "back", onclick: () => go("reactions") }, "← All transfusion reactions"));
-  const card = el("section", { class: "card" });
-  card.append(el("div", { class: "detail-head" }, el("h2", {}, rx.name), rx.acuity ? el("span", { class: "badge pill" }, rx.acuity) : null, rx.frequency ? el("span", { class: "badge grade" }, rx.frequency) : null));
-  if (rx.definition) card.append(el("p", {}, rx.definition));
-  card.append(defList([["Category", rx.category], ["Onset", rx.onset], ["Mechanism", rx.mechanism]].filter(([, v]) => v)));
-
-  // ① Diagnostic certainty — 3-column case-definition table (NHSN)
+  // ---- the biovigilance-document box: name → definition → Definitive/Probable/Possible ----
+  const box = el("section", { class: "card rx-doc" });
+  box.append(el("div", { class: "rx-head" }, el("h2", { class: "rx-name" }, rx.name),
+    rx.acuity ? el("span", { class: "badge pill" }, rx.acuity) : null,
+    rx.frequency ? el("span", { class: "badge grade" }, rx.frequency) : null));
+  if (rx.definition) box.append(el("p", { class: "rx-def" }, rx.definition));
+  if (rx.imputability_notes) box.append(el("p", { class: "rx-note" }, "Note: " + rx.imputability_notes));
   if (rx.certainty) {
-    card.append(el("h3", {}, "① Diagnostic certainty — NHSN case definition"));
-    const c = rx.certainty, grid = el("div", { class: "cert3" });
-    for (const [label, val, cls] of [["Definitive", c.definitive, "cat-IV"], ["Probable", c.probable, "cat-III"], ["Possible", c.possible, "cat-II"]]) {
-      const na = !val || val === "N/A";
-      grid.append(el("div", { class: "cert3-col" + (na ? " na" : "") },
-        el("div", { class: "cert3-head " + cls }, label),
-        el("div", { class: "cert3-body" + (na ? " muted" : "") }, na ? "Not applicable for this reaction" : val)));
-    }
-    card.append(grid);
+    const c = rx.certainty;
+    const level = (label, val) => box.append(el("div", { class: "rx-level" }, el("span", { class: "rx-lvl-label" }, label + ":"), renderCriteria(val)));
+    level("Definitive", c.definitive); level("Probable", c.probable); level("Possible", c.possible);
   }
-  // ② Severity grading
-  card.append(el("h3", {}, "② Severity grading"));
-  card.append(axis2(arr(R.severity).map((g) => [g.grade, g.desc]), sevClass));
-  // ③ Imputability — relatedness
-  card.append(el("h3", {}, "③ Imputability — relatedness to the transfusion"));
-  card.append(axis2(arr(R.imputability).map((l) => [l.level, l.desc]), (k) => IMPUT_CLASS[k]));
-  if (rx.imputability_notes) card.append(el("div", { class: "block note", style: "margin-top:8px" }, "Imputability note — " + rx.imputability_notes));
-
-  // clinical detail
-  const sec = (title, items) => { if (arr(items).length) { card.append(el("h3", {}, title)); card.append(list(items)); } };
+  content.append(box);
+  // ---- supplementary clinical detail (not part of the NHSN case definition) ----
+  const clin = el("details", { class: "card" }, el("summary", {}, "Clinical detail — signs · workup · management · prevention"));
+  if (rx.category || rx.onset || rx.mechanism) clin.append(defList([["Category", rx.category], ["Onset", rx.onset], ["Mechanism", rx.mechanism]].filter(([, v]) => v)));
+  const sec = (title, items) => { if (arr(items).length) { clin.append(el("h3", {}, title)); clin.append(list(items)); } };
   sec("Signs & symptoms", rx.signs); sec("Workup", rx.workup); sec("Management", rx.management); sec("Prevention", rx.prevention);
-  content.append(card);
+  content.append(clin);
 }
 
 // ================= GLOBAL SEARCH =================

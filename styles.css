@@ -18,6 +18,10 @@
   --bad-wash: oklch(96% 0.05 25);
   --info: oklch(55% 0.11 250);
 
+  /* biovigilance-document palette (AABB quick-reference) */
+  --doc-orange: oklch(58% 0.15 45);
+  --doc-teal: oklch(52% 0.08 215);
+
   --radius: 12px;
   --shadow: 0 1px 2px oklch(50% 0.02 260 / 0.06), 0 8px 24px oklch(50% 0.02 260 / 0.06);
   --maxw: 980px;
@@ -227,6 +231,22 @@ mark { background: oklch(92% 0.12 95); color: inherit; border-radius: 3px; paddi
   .cert3 { grid-template-columns: 1fr; }
   .axis2-row { grid-template-columns: 1fr; gap: 3px; }
 }
+
+/* ---- biovigilance-document reaction box ---- */
+.rx-doc { padding: 20px 22px; }
+.rx-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin-bottom: 2px; }
+.rx-name { color: var(--doc-orange); font-size: 20px; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
+.rx-def { margin: 8px 0 4px; line-height: 1.55; }
+.rx-note { margin: 4px 0 6px; font-style: italic; color: var(--doc-teal); font-size: 13.5px; line-height: 1.5; }
+.rx-level { padding: 11px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.rx-lvl-label { font-weight: 800; color: var(--ink); display: block; margin-bottom: 5px; }
+.rx-crit { line-height: 1.5; }
+.rx-crit .rx-conn { color: var(--doc-teal); font-weight: 700; }
+.rx-na { color: var(--ink-faint); }
+.rx-bullets { columns: 2; column-gap: 26px; margin: 7px 0; padding-left: 18px; }
+.rx-bullets li { margin: 3px 0; break-inside: avoid; }
+.rx-bullets li::marker { color: var(--doc-orange); }
+@media (max-width: 640px) { .rx-bullets { columns: 1; } }
 
 /* ---- misc ---- */
 .legend-card summary { cursor: pointer; font-weight: 650; }
