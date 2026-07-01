@@ -186,6 +186,14 @@ mark { background: oklch(92% 0.12 95); color: inherit; border-radius: 3px; paddi
 .abchip.minor { border-style: dashed; color: var(--ink-faint); }
 .abchip.on { background: var(--bad); border-color: var(--bad); color: #fff; }
 .result-card { border-color: var(--accent); }
+/* blood-prep two-column layout: inputs left, recommendation right */
+.bp-layout { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
+.bp-col { min-width: 0; }
+.bp-col > .card { margin-bottom: 16px; }
+@media (min-width: 900px) {
+  .bp-layout { grid-template-columns: minmax(0, 1.1fr) minmax(310px, 0.9fr); }
+  .result-card { position: sticky; top: 72px; max-height: calc(100vh - 88px); overflow: auto; margin-bottom: 0; }
+}
 .kpis { display: flex; flex-wrap: wrap; gap: 12px; margin: 4px 0 8px; }
 .kpi { background: var(--surface-2); border-radius: 10px; padding: 12px 16px; min-width: 120px; }
 .kpi-val { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; color: var(--ink); }

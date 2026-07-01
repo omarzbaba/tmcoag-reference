@@ -231,8 +231,9 @@ function computeBloodPrep() {
   return { approach, unitsToPrepare, unitsToScreen, combinedPct, recipientAbo, aboCompatiblePct: (recipientAbo && aboFrac != null) ? aboFrac * 100 : null, combinedAllPct, unitsToScreenRandom, perAntibody: chosen.map((a) => ({ name: a.name, code: a.code, system: a.system, pct: negPct(a, race), significant: !!a.significant })), findings, recs, caveats, flags, rhLink };
 }
 function renderBloodprep() {
-  head("🩸 Blood preparation for the OR", "Pick a procedure, set hemoglobin & ancestry, then click the antibodies — the compatible-donor frequency accounts for Rh haplotype linkage.");
+  head("🩸 Blood preparation for the OR", "Pick a procedure, set hemoglobin & recipient ABO, then click the antibodies — the recommendation builds live on the right (Rh haplotype linkage + ABO accounted for).");
   const data = KB.bloodprep || {};
+  const left = el("div", { class: "bp-col" });
   const result = el("section", { class: "card result-card" });
   const repaint = () => { result.replaceChildren(); paintResult(result); };
 
@@ -253,7 +254,7 @@ function renderBloodprep() {
     into.append(rows.length ? box : el("div", { class: "empty" }, "No procedure matches."));
   }));
   renderChosen();
-  content.append(pick);
+  left.append(pick);
 
   // --- context: Hgb + recipient ABO (donor frequencies use the predominant White pool) ---
   const ctx = el("section", { class: "card" }, el("h2", {}, "2 · Context"));
@@ -264,7 +265,7 @@ function renderBloodprep() {
     ...["O", "A", "B", "AB"].map((g) => chip(g, bp.abo === g, () => { bp.abo = bp.abo === g ? "" : g; sync(); })));
   ctx.append(hgbRow, aboRow,
     el("p", { class: "tiny muted", style: "margin:10px 4px 0" }, "Donor-frequency basis: predominant US donor population (White). Antigen-negative, Rh-haplotype, and ABO donor frequencies all use White."));
-  content.append(ctx);
+  left.append(ctx);
 
   // --- antibodies (clickable boxes grouped by system) ---
   const abCard = el("section", { class: "card" }, el("h2", {}, "3 · Alloantibodies present"), el("p", { class: "muted" }, "Click each antibody the patient has. Rh antigens (D/C/c/E/e) are computed via haplotype linkage when 2+ are selected."));
@@ -275,12 +276,12 @@ function renderBloodprep() {
     for (const ag of groups[sys]) row.append(el("button", { type: "button", class: "abchip" + (bp.abs.has(ag.code) ? " on" : "") + (ag.significant ? "" : " minor"), title: `${negPct(ag, bp.race)}% antigen-negative`, onclick: (e) => { bp.abs.has(ag.code) ? bp.abs.delete(ag.code) : bp.abs.add(ag.code); e.currentTarget.classList.toggle("on"); repaint(); } }, ag.name.replace("Anti-", "anti-")));
     abCard.append(row);
   }
-  content.append(abCard);
+  left.append(abCard);
 
   // --- live result ---
   function sync() { render(); }   // full re-render (clears content first) to reflect chip states
   paintResult(result);
-  content.append(result);
+  content.append(el("div", { class: "bp-layout" }, left, result));
 
   function paintResult(into) {
     const r = computeBloodPrep();
