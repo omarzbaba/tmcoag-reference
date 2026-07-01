@@ -245,8 +245,17 @@ mark { background: oklch(92% 0.12 95); color: inherit; border-radius: 3px; paddi
 .rx-name { color: var(--doc-orange); font-size: 20px; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
 .rx-def { margin: 8px 0 4px; line-height: 1.55; }
 .rx-note { margin: 4px 0 6px; font-style: italic; color: var(--doc-teal); font-size: 13.5px; line-height: 1.5; }
-.rx-level { padding: 11px 0; border-top: 1px solid var(--line); font-size: 14px; }
-.rx-lvl-label { font-weight: 800; color: var(--ink); display: block; margin-bottom: 5px; }
+.rx-layout { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
+.rx-clin h2 { margin-top: 0; }
+@media (min-width: 900px) { .rx-layout { grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr); } }
+.rx-level { padding: 10px 13px; margin: 10px 0; border-left: 3px solid var(--line); border-radius: 0 8px 8px 0; font-size: 14px; }
+.rx-lvl-label { font-weight: 800; display: block; margin-bottom: 5px; }
+.rx-level.def  { background: var(--good-wash);   border-color: var(--good); }
+.rx-level.prob { background: var(--warn-wash);   border-color: var(--warn); }
+.rx-level.poss { background: var(--accent-wash); border-color: var(--accent); }
+.rx-level.def  .rx-lvl-label { color: var(--good); }
+.rx-level.prob .rx-lvl-label { color: oklch(45% 0.13 70); }
+.rx-level.poss .rx-lvl-label { color: var(--accent); }
 .rx-crit { line-height: 1.5; }
 .rx-crit .rx-conn { color: var(--doc-teal); font-weight: 700; }
 .rx-na { color: var(--ink-faint); }
@@ -707,16 +716,16 @@ function reactionDetail(rx) {
   if (rx.imputability_notes) box.append(el("p", { class: "rx-note" }, "Note: " + rx.imputability_notes));
   if (rx.certainty) {
     const c = rx.certainty;
-    const level = (label, val) => box.append(el("div", { class: "rx-level" }, el("span", { class: "rx-lvl-label" }, label + ":"), renderCriteria(val)));
-    level("Definitive", c.definitive); level("Probable", c.probable); level("Possible", c.possible);
+    const level = (label, val, cls) => box.append(el("div", { class: "rx-level " + cls }, el("span", { class: "rx-lvl-label" }, label + ":"), renderCriteria(val)));
+    level("Definitive", c.definitive, "def"); level("Probable", c.probable, "prob"); level("Possible", c.possible, "poss");
   }
-  content.append(box);
-  // ---- supplementary clinical detail (not part of the NHSN case definition) ----
-  const clin = el("details", { class: "card" }, el("summary", {}, "Clinical detail — signs · workup · management · prevention"));
+  // ---- RIGHT: clinical detail (signs · workup · management · prevention) ----
+  const clin = el("section", { class: "card rx-clin" }, el("h2", {}, "Clinical detail"));
   if (rx.category || rx.onset || rx.mechanism) clin.append(defList([["Category", rx.category], ["Onset", rx.onset], ["Mechanism", rx.mechanism]].filter(([, v]) => v)));
   const sec = (title, items) => { if (arr(items).length) { clin.append(el("h3", {}, title)); clin.append(list(items)); } };
   sec("Signs & symptoms", rx.signs); sec("Workup", rx.workup); sec("Management", rx.management); sec("Prevention", rx.prevention);
-  content.append(clin);
+  // two columns: document box left, clinical right
+  content.append(el("div", { class: "rx-layout" }, box, clin));
 }
 
 // ================= GLOBAL SEARCH =================

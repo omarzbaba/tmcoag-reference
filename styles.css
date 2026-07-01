@@ -238,8 +238,17 @@ mark { background: oklch(92% 0.12 95); color: inherit; border-radius: 3px; paddi
 .rx-name { color: var(--doc-orange); font-size: 20px; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
 .rx-def { margin: 8px 0 4px; line-height: 1.55; }
 .rx-note { margin: 4px 0 6px; font-style: italic; color: var(--doc-teal); font-size: 13.5px; line-height: 1.5; }
-.rx-level { padding: 11px 0; border-top: 1px solid var(--line); font-size: 14px; }
-.rx-lvl-label { font-weight: 800; color: var(--ink); display: block; margin-bottom: 5px; }
+.rx-layout { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
+.rx-clin h2 { margin-top: 0; }
+@media (min-width: 900px) { .rx-layout { grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr); } }
+.rx-level { padding: 10px 13px; margin: 10px 0; border-left: 3px solid var(--line); border-radius: 0 8px 8px 0; font-size: 14px; }
+.rx-lvl-label { font-weight: 800; display: block; margin-bottom: 5px; }
+.rx-level.def  { background: var(--good-wash);   border-color: var(--good); }
+.rx-level.prob { background: var(--warn-wash);   border-color: var(--warn); }
+.rx-level.poss { background: var(--accent-wash); border-color: var(--accent); }
+.rx-level.def  .rx-lvl-label { color: var(--good); }
+.rx-level.prob .rx-lvl-label { color: oklch(45% 0.13 70); }
+.rx-level.poss .rx-lvl-label { color: var(--accent); }
 .rx-crit { line-height: 1.5; }
 .rx-crit .rx-conn { color: var(--doc-teal); font-weight: 700; }
 .rx-na { color: var(--ink-faint); }

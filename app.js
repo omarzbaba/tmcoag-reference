@@ -408,16 +408,16 @@ function reactionDetail(rx) {
   if (rx.imputability_notes) box.append(el("p", { class: "rx-note" }, "Note: " + rx.imputability_notes));
   if (rx.certainty) {
     const c = rx.certainty;
-    const level = (label, val) => box.append(el("div", { class: "rx-level" }, el("span", { class: "rx-lvl-label" }, label + ":"), renderCriteria(val)));
-    level("Definitive", c.definitive); level("Probable", c.probable); level("Possible", c.possible);
+    const level = (label, val, cls) => box.append(el("div", { class: "rx-level " + cls }, el("span", { class: "rx-lvl-label" }, label + ":"), renderCriteria(val)));
+    level("Definitive", c.definitive, "def"); level("Probable", c.probable, "prob"); level("Possible", c.possible, "poss");
   }
-  content.append(box);
-  // ---- supplementary clinical detail (not part of the NHSN case definition) ----
-  const clin = el("details", { class: "card" }, el("summary", {}, "Clinical detail — signs · workup · management · prevention"));
+  // ---- RIGHT: clinical detail (signs · workup · management · prevention) ----
+  const clin = el("section", { class: "card rx-clin" }, el("h2", {}, "Clinical detail"));
   if (rx.category || rx.onset || rx.mechanism) clin.append(defList([["Category", rx.category], ["Onset", rx.onset], ["Mechanism", rx.mechanism]].filter(([, v]) => v)));
   const sec = (title, items) => { if (arr(items).length) { clin.append(el("h3", {}, title)); clin.append(list(items)); } };
   sec("Signs & symptoms", rx.signs); sec("Workup", rx.workup); sec("Management", rx.management); sec("Prevention", rx.prevention);
-  content.append(clin);
+  // two columns: document box left, clinical right
+  content.append(el("div", { class: "rx-layout" }, box, clin));
 }
 
 // ================= GLOBAL SEARCH =================
